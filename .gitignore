@@ -1,0 +1,23 @@
+# Environment variables
+.env
+
+# Virtual environment
+venv/
+
+processing_state.json
+credentials.json
+token.json
+failed_batch.json
+client_secret.json
+GSA.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE files
+.vscode/
+.idea/
+.devcontainer/
+# OS files
+.DS_Store
