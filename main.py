@@ -25,6 +25,7 @@ def start_oauth_flow():
         redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
     )
     auth_url, state = flow.authorization_url(prompt="consent")
+    st.write(state)
     st.session_state["oauth_flow"] = flow
     st.markdown(f"[Login with Google]({auth_url})")
 
