@@ -26,7 +26,7 @@ def start_oauth_flow():
     )
     auth_url, state = flow.authorization_url(prompt="consent")
     st.write(state)
-    st.session_state(flow)
+    st.write(flow)
     st.session_state["oauth_flow"] = flow
     st.markdown(f"[Login with Google]({auth_url})")
 
