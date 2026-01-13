@@ -4,6 +4,8 @@
 # Virtual environment
 venv/
 
+invoices.db
+
 processing_state.json
 credentials.json
 token.json
