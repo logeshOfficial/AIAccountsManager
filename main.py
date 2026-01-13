@@ -41,10 +41,7 @@ st.title("🌟 Google Drive OAuth Example")
 # 1️⃣ Check if user is returning with ?code=XYZ
 if "code" in st.query_params:
     code = st.query_params["code"][0]  # Query params are lists
-    if "oauth_flow" not in st.session_state:
-        st.warning("OAuth flow missing. Please login again.")
-        start_oauth_flow()
-        st.stop()
+        
     flow = st.session_state["oauth_flow"]
     flow.fetch_token(code=code)
     st.session_state["creds"] = flow.credentials
@@ -65,7 +62,7 @@ if "creds" in st.session_state:
     if st.button("Logout"):
         st.session_state.pop("creds")
         st.session_state.pop("oauth_flow", None)
-        st.experimental_rerun()
+        st.rerun()
 
 # 3️⃣ If not logged in yet
 elif "creds" not in st.session_state:
