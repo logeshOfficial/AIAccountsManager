@@ -36,6 +36,7 @@ st.title("🌟 Google Drive OAuth Example")
 if "code" in st.query_params:
     code = st.query_params["code"]  # Query params are lists
     st.write(code)
+    st.write(st.session_state["oauth_flow"])
     if not st.session_state["oauth_flow"]:
         st.warning("OAuth flow missing. Please login again.")
         start_oauth_flow()
