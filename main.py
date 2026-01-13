@@ -22,7 +22,7 @@ def start_oauth_flow():
     credentials = google_auth_oauthlib.get_user_credentials(
         client_id = st.secrets["GOOGLE_CLIENT_ID"],
         client_secret = st.secrets["GOOGLE_CLIENT_SECRET"],
-        SCOPES = SCOPES,
+        scopes = SCOPES,
         minimum_port = 9000,maximum_port =9001,
     )
     st.session_state.credentials = credentials
