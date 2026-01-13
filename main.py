@@ -3,6 +3,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from io import BytesIO
 import pandas as pd
+import google_auth_oauthlib
 
 # ================= CONFIG =================
 CLIENT_CONFIG = {
@@ -18,52 +19,66 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 # ================= HELPERS =================
 def start_oauth_flow():
-    flow = Flow.from_client_config(
-        client_config=CLIENT_CONFIG,
-        scopes=SCOPES,
-        redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
+    credentials = google_auth_oauthlib.get_user_credentials(
+        client_id = st.secrets["GOOGLE_CLIENT_ID"],
+        client_secret = st.secrets["GOOGLE_CLIENT_SECRET"],
+        SCOPES = SCOPES,
+        minimum_port = 9000,maximum_port =9001,
     )
-    auth_url, state = flow.authorization_url(prompt="consent")
-    st.session_state["oauth_flow"] = flow
-    st.markdown(f"[Login with Google]({auth_url})")
+    st.session_state.credentials = credentials
 
-def fetch_drive_files(creds):
-    drive_service = build("drive", "v3", credentials=creds)
-    response = drive_service.files().list(
-        pageSize=10, fields="files(id, name)"
-    ).execute()
-    files = response.get("files", [])
-    return files
+st.button("Login", type="primary", on_click=start_oauth_flow,)
+    
+    # flow = Flow.from_client_config(
+    #     client_config=CLIENT_CONFIG,
+    #     scopes=SCOPES,
+    #     redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
+    # )
+    # auth_url, state = flow.authorization_url(prompt="consent")
+    # st.session_state["oauth_flow"] = flow
+    # st.markdown(f"[Login with Google]({auth_url})")
 
-# ================= APP LOGIC =================
-st.title("🌟 Google Drive OAuth Example")
+# def fetch_drive_files(creds):
+#     drive_service = build("drive", "v3", credentials=creds)
+#     response = drive_service.files().list(
+#         pageSize=10, fields="files(id, name)"
+#     ).execute()
+#     files = response.get("files", [])
+#     return files
 
-# 1️⃣ Check if user is returning with ?code=XYZ
-if "code" in st.query_params:
-    code = st.query_params["code"][0]  # Query params are lists
+# # ================= APP LOGIC =================
+# st.title("🌟 Google Drive OAuth Example")
+
+# # 1️⃣ Check if user is returning with ?code=XYZ
+# if "code" in st.query_params:
+#     code = st.query_params["code"][0]  # Query params are lists
+#     if "oauth_flow" not in st.session_state:
+#         st.warning("OAuth flow missing. Please login again.")
+#         start_oauth_flow()
+#         st.stop()
         
-    flow = st.session_state["oauth_flow"]
-    flow.fetch_token(code=code)
-    st.session_state["creds"] = flow.credentials
-    st.success("✅ Google login successful!")
+#     flow = st.session_state["oauth_flow"]
+#     flow.fetch_token(code=code)
+#     st.session_state["creds"] = flow.credentials
+#     st.success("✅ Google login successful!")
 
-# 2️⃣ If already logged in
-if "creds" in st.session_state:
-    st.write("Welcome! You are logged in.")
-    files = fetch_drive_files(st.session_state["creds"])
-    if files:
-        st.write("Here are some files from your Drive:")
-        for f in files:
-            st.write(f"- {f['name']}")
-    else:
-        st.info("No files found in Drive.")
+# # 2️⃣ If already logged in
+# if "creds" in st.session_state:
+#     st.write("Welcome! You are logged in.")
+#     files = fetch_drive_files(st.session_state["creds"])
+#     if files:
+#         st.write("Here are some files from your Drive:")
+#         for f in files:
+#             st.write(f"- {f['name']}")
+#     else:
+#         st.info("No files found in Drive.")
 
-    # Logout button
-    if st.button("Logout"):
-        st.session_state.pop("creds")
-        st.session_state.pop("oauth_flow", None)
-        st.rerun()
+#     # Logout button
+#     if st.button("Logout"):
+#         st.session_state.pop("creds")
+#         st.session_state.pop("oauth_flow", None)
+#         st.rerun()
 
-# 3️⃣ If not logged in yet
-elif "creds" not in st.session_state:
-    start_oauth_flow()
+# # 3️⃣ If not logged in yet
+# elif "creds" not in st.session_state:
+#     start_oauth_flow()
