@@ -49,8 +49,13 @@ if "code" in st.query_params:
 
     flow.fetch_token(code=code)
     st.session_state["creds"] = flow.credentials
-    st.success("✅ Logged in successfully")
-    st.query_params.clear()
+    
+    # 🚨 FORCE REAL REDIRECT
+    st.markdown(
+        "<meta http-equiv='refresh' content='0; url=/' />",
+        unsafe_allow_html=True
+    )
+    st.stop()
 
 # ---------------- LOGGED IN ----------------
 if "creds" in st.session_state:
