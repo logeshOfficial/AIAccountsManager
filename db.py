@@ -18,7 +18,7 @@ def insert_token(token):
     cur = conn.cursor()
 
     cur.execute("""
-                INSERT INTO TOKEN (token)
+                INSERT INTO TOKEN (flow)
                 VALUES (?)
                 """, (token))
     
