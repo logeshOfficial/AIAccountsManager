@@ -1,22 +1,44 @@
 import sqlite3
 import json 
+import pandas as pd
+
 
 DB_PATH = "invoices.db"
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
+def get_data():
+    conn = sqlite3.connect("invoices.db")
+    df = pd.read_sql("SELECT * FROM invoices ORDER BY created_at DESC", conn)
+    return df
+
 def insert_token(token):
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
-                INSERT INTO TOKEN (token
-                """)
+                INSERT INTO TOKEN (token)
+                VALUES (?)
+                """, (token))
     
     conn.commit()
     conn.close()
 
+def init_token_db():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(""" 
+        CREATE TABLE IF NOT EXISTS TOKEN (
+            flow TEXT
+        ,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+        """)
+    
+    conn.commit()
+    conn.close()
+    
 def init_db():
     conn = get_connection()
     cur = conn.cursor()

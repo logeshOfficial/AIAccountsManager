@@ -4,6 +4,8 @@ from googleapiclient.discovery import build
 from io import BytesIO
 import pandas as pd
 import google_auth_oauthlib
+import db
+
 
 # ================= CONFIG =================
 CLIENT_CONFIG = {
@@ -27,7 +29,12 @@ def start_oauth_flow():
     auth_url, state = flow.authorization_url(prompt="consent")
     st.write(state)
     st.write(flow)
-    st.session_state["oauth_flow"] = flow
+    db.insert_token(flow)
+    
+    df = db.get_data()
+    st.dataframe(df)
+    
+    # st.session_state["oauth_flow"] = flow
     st.markdown(f"[Login with Google]({auth_url})")
 
 # ================= APP LOGIC =================
@@ -37,11 +44,11 @@ st.title("🌟 Google Drive OAuth Example")
 if "code" in st.query_params:
     code = st.query_params["code"]  # Query params are lists
     st.write(code)
-    st.write(st.session_state["oauth_flow"])
-    if not st.session_state["oauth_flow"]:
-        st.warning("OAuth flow missing. Please login again.")
-        start_oauth_flow()
-        st.stop()
+    # st.write(st.session_state["oauth_flow"])
+    # if not st.session_state["oauth_flow"]:
+    #     st.warning("OAuth flow missing. Please login again.")
+    #     start_oauth_flow()
+    #     st.stop()
         
     flow = st.session_state["oauth_flow"]
     flow.fetch_token(code=code)
@@ -60,4 +67,5 @@ if "creds" in st.session_state:
 
 # 3️⃣ If not logged in yet
 elif "creds" not in st.session_state:
+    db.init_token_db()
     start_oauth_flow()
