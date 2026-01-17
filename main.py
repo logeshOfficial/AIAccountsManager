@@ -34,20 +34,15 @@ def start_login():
 # ---------------- CALLBACK ----------------
 if "code" in st.query_params:
 
-    # 🔒 DO NOT REPROCESS CODE
     if "creds" in st.session_state:
-        st.markdown(
-            "<meta http-equiv='refresh' content='0; url=/' />",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<meta http-equiv='refresh' content='0; url=/' />", unsafe_allow_html=True)
         st.stop()
 
-    code = st.query_params["code"][0]
     state = st.query_params.get("state", [None])[0]
 
-    # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-    #     st.error("Invalid OAuth state. Please login again.")
-    #     st.stop()
+    if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
+        st.error("Invalid OAuth state")
+        st.stop()
 
     flow = Flow.from_client_config(
         CLIENT_CONFIG,
@@ -56,17 +51,16 @@ if "code" in st.query_params:
         state=state,
     )
 
-    # ✅ THIS MUST RUN EXACTLY ONCE
-    flow.fetch_token(code=code)
+    # ✅ CRITICAL FIX
+    flow.fetch_token(
+        authorization_response=st.request.url
+    )
+
     st.session_state["creds"] = flow.credentials
 
-    # 🔁 HARD REDIRECT (CLEARS CODE)
-    st.markdown(
-        "<meta http-equiv='refresh' content='0; url=/' />",
-        unsafe_allow_html=True,
-    )
+    # 🔁 HARD REDIRECT
+    st.markdown("<meta http-equiv='refresh' content='0; url=/' />", unsafe_allow_html=True)
     st.stop()
-
 
 # ---------------- LOGGED IN ----------------
 if "creds" in st.session_state:
