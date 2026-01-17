@@ -1,11 +1,7 @@
 import streamlit as st
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from io import BytesIO
-import pandas as pd
-import google_auth_oauthlib
 
-# ================= CONFIG =================
 CLIENT_CONFIG = {
     "web": {
         "client_id": st.secrets["GOOGLE_CLIENT_ID"],
@@ -15,49 +11,55 @@ CLIENT_CONFIG = {
         "redirect_uris": [st.secrets["REDIRECT_URI"]],
     }
 }
+
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
-# ================= HELPERS =================
-def start_oauth_flow():
+st.title("🌟 Google Drive OAuth (Correct)")
+
+# ---------------- START LOGIN ----------------
+def start_login():
     flow = Flow.from_client_config(
-        client_config=CLIENT_CONFIG,
+        CLIENT_CONFIG,
         scopes=SCOPES,
         redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
     )
-    auth_url, state = flow.authorization_url(prompt="consent")
-    st.write(state)
-    st.write(flow)
-    st.session_state["oauth_flow"] = flow
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+    st.session_state["oauth_state"] = state
     st.markdown(f"[Login with Google]({auth_url})")
 
-# ================= APP LOGIC =================
-st.title("🌟 Google Drive OAuth Example")
-
-# 1️⃣ Check if user is returning with ?code=XYZ
+# ---------------- CALLBACK ----------------
 if "code" in st.query_params:
-    code = st.query_params["code"]  # Query params are lists
-    st.write(code)
-    st.write(st.session_state["oauth_flow"])
-    if not st.session_state["oauth_flow"]:
-        st.warning("OAuth flow missing. Please login again.")
-        start_oauth_flow()
+    code = st.query_params["code"][0]
+    state = st.query_params.get("state", [None])[0]
+
+    if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
+        st.error("Invalid OAuth state. Please login again.")
         st.stop()
-        
-    flow = st.session_state["oauth_flow"]
+
+    flow = Flow.from_client_config(
+        CLIENT_CONFIG,
+        scopes=SCOPES,
+        redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
+        state=state,
+    )
+
     flow.fetch_token(code=code)
     st.session_state["creds"] = flow.credentials
-    st.success("✅ Google login successful!")
+    st.success("✅ Logged in successfully")
+    st.query_params.clear()
 
-# 2️⃣ If already logged in
+# ---------------- LOGGED IN ----------------
 if "creds" in st.session_state:
-    st.write("Welcome! You are logged in.")
+    st.success("Welcome! You are logged in.")
 
-    # Logout button
     if st.button("Logout"):
-        st.session_state.pop("creds")
-        st.session_state.pop("oauth_flow", None)
+        st.session_state.clear()
         st.rerun()
 
-# 3️⃣ If not logged in yet
-elif "creds" not in st.session_state:
-    start_oauth_flow()
+# ---------------- NOT LOGGED IN ----------------
+else:
+    start_login()
