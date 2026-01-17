@@ -32,6 +32,8 @@ def start_login():
     st.markdown(f"[Login with Google]({auth_url})")
 
 # ---------------- CALLBACK ----------------
+from urllib.parse import urlencode
+
 if "code" in st.query_params:
 
     if "creds" in st.session_state:
@@ -40,9 +42,9 @@ if "code" in st.query_params:
 
     state = st.query_params.get("state", [None])[0]
 
-    # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-    #     st.error("Invalid OAuth state")
-    #     st.stop()
+    if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
+        st.error("Invalid OAuth state")
+        st.stop()
 
     flow = Flow.from_client_config(
         CLIENT_CONFIG,
@@ -51,14 +53,15 @@ if "code" in st.query_params:
         state=state,
     )
 
-    # ✅ CRITICAL FIX
-    flow.fetch_token(
-        authorization_response=st.request.url
-    )
+    # ✅ STREAMLIT-SAFE AUTH RESPONSE
+    base_url = CLIENT_CONFIG["web"]["redirect_uris"][0]
+    query = urlencode({k: v[0] for k, v in st.query_params.items()})
+    authorization_response = f"{base_url}?{query}"
+
+    flow.fetch_token(authorization_response=authorization_response)
 
     st.session_state["creds"] = flow.credentials
 
-    # 🔁 HARD REDIRECT
     st.markdown("<meta http-equiv='refresh' content='0; url=/' />", unsafe_allow_html=True)
     st.stop()
 
