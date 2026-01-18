@@ -128,7 +128,7 @@ if st.button("🚪 Logout"):
 
 # Example Google Drive call
 drive = build("drive", "v3", credentials=creds)
-files = drive.files().list(pageSize=5, fields="files(name)").execute()
+files = drive.files().list(fields="files(name)").execute()
 
 st.write("📁 Your Drive files:")
 for f in files.get("files", []):
