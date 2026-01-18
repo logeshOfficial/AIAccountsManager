@@ -2,9 +2,9 @@ import sqlite3
 import json 
 import pandas as pd
 
-
 DB_PATH = "invoices.db"
-TOKEN_DB_PATH = "oauth_tokens.db"
+TOKEN_DB_PATH = "/mount/src/oauth_tokens.db"
+
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -12,7 +12,7 @@ def get_connection():
 def get_connection_for_token_db():
     return sqlite3.connect(TOKEN_DB_PATH, check_same_thread=False)
 
-def init_db():
+def init_token_db():
     conn = get_connection()
     cur = conn.cursor()
 
@@ -27,6 +27,7 @@ def init_db():
     conn.close()
 
 def save_token(user_id: str, token_json: str):
+    init_token_db()
     conn = get_connection()
     cur = conn.cursor()
 
@@ -39,6 +40,8 @@ def save_token(user_id: str, token_json: str):
     conn.close()
 
 def load_token(user_id: str):
+    init_token_db()
+    
     conn = get_connection()
     cur = conn.cursor()
 
@@ -52,6 +55,8 @@ def load_token(user_id: str):
     return row[0] if row else None
 
 def delete_token(user_id: str):
+    init_token_db()
+    
     conn = get_connection()
     cur = conn.cursor()
 
