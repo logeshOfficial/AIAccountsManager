@@ -32,10 +32,11 @@ def start_oauth_flow():
     auth_url, state = flow.authorization_url(prompt="consent")
     st.write(state)
     st.write(flow)
-    db.insert_token(flow.credentials)
+    creds = flow.credentials
+    # db.insert_token(flow.credentials)
     
-    df = db.get_data()
-    st.dataframe(df)
+    # df = db.get_data()
+    # st.dataframe(df)
     
     # st.session_state["oauth_flow"] = flow
     st.markdown(f"[Login with Google]({auth_url})")
