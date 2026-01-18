@@ -22,7 +22,7 @@ def load_drive():
             "redirect_uris": [st.secrets["REDIRECT_URI"]],
         }
     }
-    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    SCOPES = ["https://www.googleapis.com/auth/drive"]
 
     # ================= HELPERS =================
     def start_oauth_flow():
