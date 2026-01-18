@@ -7,6 +7,19 @@ import db
 import json
 import load_files_from_gdrive
 
+
+import os
+import streamlit as st
+
+DB_PATH = "/mount/src/token.db"
+
+if st.button("delete_token_db"):
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+        st.success("✅ token.db deleted successfully")
+    else:
+        st.info("ℹ️ token.db not found")
+
 def load_drive():
     # 👤 TEMP USER ID
     # In production → use Auth0 / Streamlit auth user id
@@ -22,7 +35,10 @@ def load_drive():
             "redirect_uris": [st.secrets["REDIRECT_URI"]],
         }
     }
-    SCOPES = ["https://www.googleapis.com/auth/drive"]
+    SCOPES = [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.readonly",
+        ]
 
     # ================= HELPERS =================
     def start_oauth_flow():
