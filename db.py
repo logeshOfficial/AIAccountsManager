@@ -123,6 +123,7 @@ def insert_invoice(invoice):
     conn.close()
 
 def read_db():
+    init_db()
     conn = get_connection()
     cur = conn.cursor()
 
