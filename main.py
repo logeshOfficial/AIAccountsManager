@@ -11,7 +11,7 @@ import load_files_from_gdrive
 import os
 import streamlit as st
 
-DB_PATH = "/mount/src/token.db"
+DB_PATH = "/mount/src/oauth_tokens.db"
 
 if st.button("delete_token_db"):
     if os.path.exists(DB_PATH):
