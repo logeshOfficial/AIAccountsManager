@@ -137,8 +137,8 @@ import streamlit as st
 view = st.query_params.get("view", "home")
 
 st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home"}))
-st.sidebar.button("Chat", on_click=lambda: st.query_params.update({"view": "chat"}))
-st.sidebar.button("Drive", on_click=lambda: st.query_params.update({"view": "drive"}))
+st.sidebar.button("Chat_Bot", on_click=lambda: st.query_params.update({"view": "chat"}))
+st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"view": "drive"}))
 
 if view == "home":
     st.title("🏠 Home")

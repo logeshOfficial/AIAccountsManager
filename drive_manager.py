@@ -4,7 +4,6 @@ import time
 from googleapiclient.errors import HttpError
 import random
 import time
-from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import streamlit as st
@@ -82,41 +81,6 @@ class DriveManager:
 
         folder = self.drive_execute(self.service.files().create(body=metadata, fields="id"))
         
-        return folder["id"]
-
-    def get_or_create_root_folder(self, folder_name):
-        """
-        Returns folder ID if exists, otherwise creates it.
-        """
-        query = (
-            f"name='{folder_name}' "
-            "and mimeType='application/vnd.google-apps.folder' "
-            "and trashed=false"
-        )
-
-        response = self.drive_execute(
-            self.service.files().list(
-                q=query,
-                fields="files(id, name)"
-            )
-        )
-
-        if response["files"]:
-            return response["files"][0]["id"]
-
-        # Create folder if not exists
-        folder_metadata = {
-            "name": folder_name,
-            "mimeType": "application/vnd.google-apps.folder"
-        }
-
-        folder = self.drive_execute(
-            self.service.files().create(
-                body=folder_metadata,
-                fields="id"
-            )
-        )
-
         return folder["id"]
 
     def list_files_in_folder(self, folder_id):
