@@ -77,6 +77,7 @@ def load_credentials():
 
     # 2️⃣ SQLite
     token_json = db.load_token(USER_ID)
+    st.write(token_json)
     if token_json:
         info = json.loads(token_json)
 
