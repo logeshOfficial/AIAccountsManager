@@ -124,7 +124,7 @@ def load_drive():
     if st.button("🚪 Logout"):
         logout()
 
-    load_files_from_gdrive.initiate_drive(SCOPES)
+    load_files_from_gdrive.initiate_drive(creds)
     # # Example Google Drive call
     # drive = build("drive", "v3", credentials=creds)
     # files = drive.files().list(fields="files(name)").execute()

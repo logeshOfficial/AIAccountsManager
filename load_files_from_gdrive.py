@@ -211,9 +211,9 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
         print(f"Loop execution time: {elapsed_time:.2f}s")
 
 
-def initiate_drive(SCOPES):
+def initiate_drive(creds):
     invoice_processor = InvoiceProcessor()
-    drive_manager = DriveManager(SCOPES)
+    drive_manager = DriveManager(creds)
     st.session_state["drive_manager"] = drive_manager
     
     if st.button("Chat Bot"):

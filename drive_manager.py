@@ -10,15 +10,10 @@ from googleapiclient.http import MediaIoBaseDownload
 import streamlit as st
 
 class DriveManager:
-    def __init__(self, SCOPES):
+    def __init__(self, creds):
         try:
-            # 🔐 Load service account from Streamlit secrets
-            creds = Credentials.from_service_account_info(
-                st.secrets["google_service_account"],
-                scopes=SCOPES,
-            )
-
             self.service = build("drive", "v3", credentials=creds)
+            
         except KeyError:
             st.error("Error ocured while loading Google Drive credentials on secrets. Please contact the administrator.")
             st.stop()
