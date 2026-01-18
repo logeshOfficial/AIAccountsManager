@@ -233,8 +233,7 @@ def initiate_drive(creds):
         
         # Step 1: Root folder
         status.info("📁 Checking root folder...")
-        root_folder_id = drive_manager.resolve_folder_id(PROJECT_ROOT)
-        input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
+        root_folder_id = drive_manager.get_or_create_folder(PROJECT_ROOT)
         
         progress.progress(25)
         st.info(f"Processing files from folder: {input_docs_folder_id}")
