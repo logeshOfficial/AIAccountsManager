@@ -13,7 +13,7 @@ from invoice_processor import InvoiceProcessor
 from google.api_core.exceptions import ResourceExhausted
 from googleapiclient.http import MediaFileUpload
 import config
-
+import db
 
 def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS):
     
@@ -198,7 +198,8 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             gc.collect()
             valid_file_paths.clear()
             not_valid_file_paths.clear()
-                    
+            
+            st.write(db.read_db())
     except Exception as e:
         print("❌Error:", str(e))
 
