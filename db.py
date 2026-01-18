@@ -121,3 +121,15 @@ def insert_invoice(invoice):
 
     conn.commit()
     conn.close()
+
+def read_db():
+    conn = get_connection_for_token_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT * FROM invoices""")
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else None

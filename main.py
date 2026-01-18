@@ -158,6 +158,8 @@ st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"vie
 
 if view == "home":
     st.title("🏠 Home")
+    df = db.read_db()
+    st.dataframe(df)
 elif view == "chat":
     st.title("💬 Chat Bot")
 elif view == "drive":
