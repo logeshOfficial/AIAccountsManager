@@ -4,38 +4,61 @@ import pandas as pd
 
 
 DB_PATH = "invoices.db"
+TOKEN_DB_PATH = "oauth_tokens.db"
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-def get_data():
-    conn = sqlite3.connect("invoices.db")
-    df = pd.read_sql("SELECT * FROM invoices ORDER BY created_at DESC", conn)
-    return df
+def get_connection_for_token_db():
+    return sqlite3.connect(TOKEN_DB_PATH, check_same_thread=False)
 
-def insert_token(token):
+def init_db():
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
-                INSERT INTO TOKEN (flow)
-                VALUES (?)
-                """, (token))
-    
+        CREATE TABLE IF NOT EXISTS google_tokens (
+            user_id TEXT PRIMARY KEY,
+            token_json TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 
-def init_token_db():
+def save_token(user_id: str, token_json: str):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(""" 
-        CREATE TABLE IF NOT EXISTS TOKEN (
-            flow TEXT
-        ,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-        """)
-    
+    cur.execute("""
+        INSERT OR REPLACE INTO google_tokens (user_id, token_json)
+        VALUES (?, ?)
+    """, (user_id, token_json))
+
+    conn.commit()
+    conn.close()
+
+def load_token(user_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT token_json FROM google_tokens WHERE user_id = ?
+    """, (user_id,))
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else None
+
+def delete_token(user_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM google_tokens WHERE user_id = ?
+    """, (user_id,))
+
     conn.commit()
     conn.close()
     
