@@ -15,7 +15,7 @@ from googleapiclient.http import MediaFileUpload
 import config
 
 
-def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS, output_id):
+def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS):
     
     st.success("🟢 System ready")
     st.info("📄 Processing invoices from Google Drive. Kindly please wait until the progress complete \n Note: *** Don't refresh the page.***")
@@ -236,7 +236,7 @@ def initiate_drive(creds):
         root_folder_id = drive_manager.get_or_create_folder(PROJECT_ROOT)
         
         progress.progress(25)
-        st.info(f"Processing files from folder: {input_docs_folder_id}")
+        st.info(f"Processing files from folder: {INPUT_DOCS}")
         
         DRIVE_DIRS = {
             "project_id": root_folder_id,
@@ -255,8 +255,7 @@ def initiate_drive(creds):
         status.success("✅ Initialization complete")
         time.sleep(1)
         
-        output_id = st.session_state.drive_dirs["output"]
-        start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS, output_id)
+        start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS)
 
         st.session_state["drive_ready"] = True
 
