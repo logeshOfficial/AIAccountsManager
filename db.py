@@ -2,7 +2,7 @@ import sqlite3
 import json 
 import pandas as pd
 
-DB_PATH = "invoices.db"
+DB_PATH = "/mount/src/invoices.db"
 TOKEN_DB_PATH = "/mount/src/oauth_tokens.db"
 
 
