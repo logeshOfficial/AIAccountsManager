@@ -229,21 +229,21 @@ def initiate_drive(SCOPES):
         
         # Step 1: Root folder
         status.info("📁 Checking root folder...")
-        root_folder_id = drive_manager.resolve_folder_id(PROJECT_ROOT)
-        input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
+        root_folder_id = st.session_state.drive_manager.resolve_folder_id(PROJECT_ROOT)
+        input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
        
         progress.progress(25)
         st.info(f"Processing files from folder: {input_docs_folder_id}")
         
         st.session_state.drive_dirs = {
             "project_id": root_folder_id,
-            "scanned_docs": drive_manager.get_or_create_folder(
+            "scanned_docs": st.session_state.drive_manager.get_or_create_folder(
                 "scanned_docs", root_folder_id
             ),
-            "invalid_docs": drive_manager.get_or_create_folder(
+            "invalid_docs": st.session_state.drive_manager.get_or_create_folder(
                 "invalid_docs", root_folder_id
             ),
-            "output": drive_manager.get_or_create_folder(
+            "output": st.session_state.drive_manager.get_or_create_folder(
                 "output", root_folder_id
             ),
         }
