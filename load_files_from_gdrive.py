@@ -14,7 +14,7 @@ from google.api_core.exceptions import ResourceExhausted
 from googleapiclient.http import MediaFileUpload
 import config
 
-def initiate_drive():
+def initiate_drive(SCOPES):
     def start_processing():
         
         st.success("🟢 System ready")
@@ -62,7 +62,7 @@ def initiate_drive():
                 )
                 
                 st.info(f"Batch_len: {len(filepaths[i:i+batch_size])}")
-                batch_extracted  = invoice_processor.extractor(st.session_state.drive_manager.service, filepaths[i:i+batch_size])
+                batch_extracted  = invoice_processor.extractor(drive_manager.service, filepaths[i:i+batch_size])
                 
                 st.info(batch_extracted)
                 batch_data = []
@@ -167,13 +167,13 @@ def initiate_drive():
                 time.sleep(randint(3, 7))
                 
                 # Move processed files in Drive        
-                st.session_state.drive_manager.move_files_drive(
+                drive_manager.move_files_drive(
                     valid_file_paths,
                     dest_dir="scanned_docs",
                     drive_dirs=DRIVE_DIRS
                 )
                 time.sleep(2) 
-                st.session_state.drive_manager.move_files_drive(
+                drive_manager.move_files_drive(
                     not_valid_file_paths,
                     dest_dir="invalid_docs",
                     drive_dirs=DRIVE_DIRS
@@ -229,21 +229,21 @@ def initiate_drive():
         
         # Step 1: Root folder
         status.info("📁 Checking root folder...")
-        root_folder_id = st.session_state.drive_manager.resolve_folder_id(PROJECT_ROOT)
-        input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
+        root_folder_id = drive_manager.resolve_folder_id(PROJECT_ROOT)
+        input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
        
         progress.progress(25)
         st.info(f"Processing files from folder: {input_docs_folder_id}")
         
         st.session_state.drive_dirs = {
             "project_id": root_folder_id,
-            "scanned_docs": st.session_state.drive_manager.get_or_create_folder(
+            "scanned_docs": drive_manager.get_or_create_folder(
                 "scanned_docs", root_folder_id
             ),
-            "invalid_docs": st.session_state.drive_manager.get_or_create_folder(
+            "invalid_docs": drive_manager.get_or_create_folder(
                 "invalid_docs", root_folder_id
             ),
-            "output": st.session_state.drive_manager.get_or_create_folder(
+            "output": drive_manager.get_or_create_folder(
                 "output", root_folder_id
             ),
         }
@@ -251,12 +251,12 @@ def initiate_drive():
         progress.progress(100)
         status.success("✅ Initialization complete")
         time.sleep(1)
-        
-    drive_manager = st.session_state.drive_manager
-
+    
     if st.button("Start Invoice Processing"):
         invoice_processor = InvoiceProcessor()
+        drive_manager = DriveManager(SCOPES)
         input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
+        st.session_state["drive_manager"] = drive_manager
         DRIVE_DIRS = st.session_state.drive_dirs
         output_id = st.session_state.drive_dirs["output"]
         start_processing()
