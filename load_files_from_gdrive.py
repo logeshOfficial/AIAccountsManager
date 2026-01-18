@@ -259,7 +259,7 @@ def initiate_drive(creds):
         time.sleep(1)
 
     if st.button("Start Invoice Processing"):
-        input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
+        input_docs_folder_id = drive_manager.get_or_create_folder(INPUT_DOCS)
         DRIVE_DIRS = st.session_state.drive_dirs
         output_id = st.session_state.drive_dirs["output"]
         start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS, output_id)
