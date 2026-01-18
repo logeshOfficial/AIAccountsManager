@@ -123,7 +123,7 @@ def insert_invoice(invoice):
     conn.close()
 
 def read_db():
-    conn = get_connection_for_token_db()
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
