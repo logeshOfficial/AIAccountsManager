@@ -215,18 +215,12 @@ def initiate_drive():
         st.switch_page("pages/chat_bot.py")
             
     st.title("Accounts Manager - Google Drive")
-    PARENT_FOLDER = st.secrets["PARENT_FOLDER"]
     INPUT_DOCS = st.secrets["INPUT_DOCS"]
 
     if "init_progress" not in st.session_state:
         st.session_state.init_progress = 0
 
-    if "drive_manager" not in st.session_state:
-        SCOPES = ["https://www.googleapis.com/auth/drive"]
-        with st.spinner("🔐 Logging into Google Drive..."):
-            st.session_state.drive_manager = DriveManager(SCOPES)
-        st.success("✅ Logged in successfully")
-        
+    if "drive_manager" not in st.session_state:        
         PROJECT_ROOT = "Invoice_Processing"
         
         st.subheader("🚀 Initializing workspace")
@@ -235,12 +229,11 @@ def initiate_drive():
         
         # Step 1: Root folder
         status.info("📁 Checking root folder...")
-        root_folder_id = st.session_state.drive_manager.resolve_folder_id(PARENT_FOLDER)
-        # input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
-        input_docs_folder_id = st.session_state.drive_manager.get_child_folder_id(st.session_state.drive_manager.service, INPUT_DOCS, root_folder_id)
-
+        root_folder_id = st.session_state.drive_manager.resolve_folder_id(PROJECT_ROOT)
+        input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
+       
         progress.progress(25)
-        st.info(f"Processing files from folder: {PARENT_FOLDER}")
+        st.info(f"Processing files from folder: {input_docs_folder_id}")
         
         st.session_state.drive_dirs = {
             "project_id": root_folder_id,
@@ -263,9 +256,7 @@ def initiate_drive():
 
     if st.button("Start Invoice Processing"):
         invoice_processor = InvoiceProcessor()
-        root_folder_id = drive_manager.resolve_folder_id(PARENT_FOLDER)
-        # input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
-        input_docs_folder_id = drive_manager.get_child_folder_id(drive_manager.service, INPUT_DOCS, root_folder_id)
+        input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
         DRIVE_DIRS = st.session_state.drive_dirs
         output_id = st.session_state.drive_dirs["output"]
         start_processing()
