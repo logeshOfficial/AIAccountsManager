@@ -26,10 +26,13 @@ def start_oauth_flow():
         scopes=SCOPES,
         redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
     )
+    # 🔥 CRITICAL
+    flow.autogenerate_code_verifier = False
+    
     auth_url, state = flow.authorization_url(prompt="consent")
     st.write(state)
     st.write(flow)
-    db.insert_token(flow)
+    db.insert_token(flow.credentials)
     
     df = db.get_data()
     st.dataframe(df)
@@ -51,6 +54,9 @@ if "code" in st.query_params:
     #     st.stop()
         
     flow = st.session_state["oauth_flow"]
+     # 🔥 MUST MATCH
+    flow.autogenerate_code_verifier = False
+    
     flow.fetch_token(code=code)
     st.session_state["creds"] = flow.credentials
     st.success("✅ Google login successful!")
