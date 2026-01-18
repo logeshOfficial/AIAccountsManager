@@ -210,49 +210,50 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
         elapsed_time = end_time - start_time
         print(f"Loop execution time: {elapsed_time:.2f}s")
 
-if st.button("Chat Bot"):
-    st.cache_data.clear()
-    st.switch_page("pages/chat_bot.py")
-        
-st.title("Accounts Manager - Google Drive")
-INPUT_DOCS = st.secrets["INPUT_DOCS"]
-
-if "init_progress" not in st.session_state:
-    st.session_state.init_progress = 0
-
-if "drive_manager" not in st.session_state:        
-    PROJECT_ROOT = "Invoice_Processing"
-    
-    st.subheader("🚀 Initializing workspace")
-    progress = st.progress(0)
-    status = st.empty()
-    
-    # Step 1: Root folder
-    status.info("📁 Checking root folder...")
-    root_folder_id = st.session_state.drive_manager.resolve_folder_id(PROJECT_ROOT)
-    input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
-    
-    progress.progress(25)
-    st.info(f"Processing files from folder: {input_docs_folder_id}")
-    
-    st.session_state.drive_dirs = {
-        "project_id": root_folder_id,
-        "scanned_docs": st.session_state.drive_manager.get_or_create_folder(
-            "scanned_docs", root_folder_id
-        ),
-        "invalid_docs": st.session_state.drive_manager.get_or_create_folder(
-            "invalid_docs", root_folder_id
-        ),
-        "output": st.session_state.drive_manager.get_or_create_folder(
-            "output", root_folder_id
-        ),
-    }
-
-    progress.progress(100)
-    status.success("✅ Initialization complete")
-    time.sleep(1)
 
 def initiate_drive(SCOPES):
+    if st.button("Chat Bot"):
+        st.cache_data.clear()
+        st.switch_page("pages/chat_bot.py")
+            
+    st.title("Accounts Manager - Google Drive")
+    INPUT_DOCS = st.secrets["INPUT_DOCS"]
+
+    if "init_progress" not in st.session_state:
+        st.session_state.init_progress = 0
+
+    if "drive_manager" not in st.session_state:        
+        PROJECT_ROOT = "Invoice_Processing"
+        
+        st.subheader("🚀 Initializing workspace")
+        progress = st.progress(0)
+        status = st.empty()
+        
+        # Step 1: Root folder
+        status.info("📁 Checking root folder...")
+        root_folder_id = st.session_state.drive_manager.resolve_folder_id(PROJECT_ROOT)
+        input_docs_folder_id = st.session_state.drive_manager.resolve_folder_id(INPUT_DOCS)
+        
+        progress.progress(25)
+        st.info(f"Processing files from folder: {input_docs_folder_id}")
+        
+        st.session_state.drive_dirs = {
+            "project_id": root_folder_id,
+            "scanned_docs": st.session_state.drive_manager.get_or_create_folder(
+                "scanned_docs", root_folder_id
+            ),
+            "invalid_docs": st.session_state.drive_manager.get_or_create_folder(
+                "invalid_docs", root_folder_id
+            ),
+            "output": st.session_state.drive_manager.get_or_create_folder(
+                "output", root_folder_id
+            ),
+        }
+
+        progress.progress(100)
+        status.success("✅ Initialization complete")
+        time.sleep(1)
+
     if st.button("Start Invoice Processing"):
         invoice_processor = InvoiceProcessor()
         drive_manager = DriveManager(SCOPES)
