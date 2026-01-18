@@ -212,6 +212,10 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
 
 def initiate_drive(SCOPES):
+    invoice_processor = InvoiceProcessor()
+    drive_manager = DriveManager(SCOPES)
+    st.session_state["drive_manager"] = drive_manager
+    
     if st.button("Chat Bot"):
         st.cache_data.clear()
         st.switch_page("pages/chat_bot.py")
@@ -255,10 +259,7 @@ def initiate_drive(SCOPES):
         time.sleep(1)
 
     if st.button("Start Invoice Processing"):
-        invoice_processor = InvoiceProcessor()
-        drive_manager = DriveManager(SCOPES)
         input_docs_folder_id = drive_manager.resolve_folder_id(INPUT_DOCS)
-        st.session_state["drive_manager"] = drive_manager
         DRIVE_DIRS = st.session_state.drive_dirs
         output_id = st.session_state.drive_dirs["output"]
         start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS, output_id)
