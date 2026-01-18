@@ -129,7 +129,7 @@ def read_db():
     cur.execute("""
         SELECT * FROM invoices""")
 
-    row = cur.fetchone()
+    row = cur.fetchall()
     conn.close()
 
     return row[0] if row else None
