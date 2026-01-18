@@ -221,12 +221,11 @@ def initiate_drive(creds):
         st.switch_page("pages/chat_bot.py")
             
     st.title("Accounts Manager - Google Drive")
-    INPUT_DOCS = st.secrets["INPUT_DOCS"]
+    INPUT_DOCS = st.secrets["INPUT_DOCS"]        
 
-    if "init_progress" not in st.session_state:
-        st.session_state.init_progress = 0
-
-    if "drive_manager" not in st.session_state:        
+    if st.button("Start Invoice Processing"):
+        input_docs_folder_id = drive_manager.get_or_create_folder(INPUT_DOCS)
+        
         PROJECT_ROOT = "Invoice_Processing"
         
         st.subheader("🚀 Initializing workspace")
@@ -257,9 +256,7 @@ def initiate_drive(creds):
         progress.progress(100)
         status.success("✅ Initialization complete")
         time.sleep(1)
-
-    if st.button("Start Invoice Processing"):
-        input_docs_folder_id = drive_manager.get_or_create_folder(INPUT_DOCS)
+        
         DRIVE_DIRS = st.session_state.drive_dirs
         output_id = st.session_state.drive_dirs["output"]
         start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS, output_id)
