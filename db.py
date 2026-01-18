@@ -13,7 +13,7 @@ def get_connection_for_token_db():
     return sqlite3.connect(TOKEN_DB_PATH, check_same_thread=False)
 
 def init_token_db():
-    conn = get_connection()
+    conn = get_connection_for_token_db()
     cur = conn.cursor()
 
     cur.execute("""
@@ -28,7 +28,7 @@ def init_token_db():
 
 def save_token(user_id: str, token_json: str):
     init_token_db()
-    conn = get_connection()
+    conn = get_connection_for_token_db()
     cur = conn.cursor()
 
     cur.execute("""
@@ -42,7 +42,7 @@ def save_token(user_id: str, token_json: str):
 def load_token(user_id: str):
     init_token_db()
     
-    conn = get_connection()
+    conn = get_connection_for_token_db()
     cur = conn.cursor()
 
     cur.execute("""
@@ -57,7 +57,7 @@ def load_token(user_id: str):
 def delete_token(user_id: str):
     init_token_db()
     
-    conn = get_connection()
+    conn = get_connection_for_token_db()
     cur = conn.cursor()
 
     cur.execute("""
