@@ -107,8 +107,7 @@ def init_db():
             file_name TEXT,
             invoice_number TEXT,
             invoice_date TEXT,
-            gst_number TEXT
-            vendor_name TEXT,
+            gst_number TEXT,
             description TEXT,
             total_amount REAL,
             raw_text TEXT,
@@ -138,7 +137,6 @@ def insert_invoice(invoice):
             invoice_number,
             invoice_date,
             gst_number,
-            vendor_name,
             description,
             total_amount,
             raw_text
@@ -150,7 +148,6 @@ def insert_invoice(invoice):
             invoice.get("invoice_number"),
             invoice.get("invoice_date"),
             invoice.get("gst_number"),
-            invoice.get("vendor_name", ""),
             invoice.get("description"),
             float(invoice.get("total_amount", 0)),
             json.dumps(invoice.get("raw_text", ""))

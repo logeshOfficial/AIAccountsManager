@@ -3,7 +3,22 @@ from google_auth_oauthlib.flow import Flow
 import db
 import streamlit as st
 import load_files_from_gdrive
+import os
 
+if st.button("delete"):
+    DB_PATH = "/mount/src/invoices.db"
+    if os.path.exists(DB_PATH):
+        try:
+            # 3. Perform the deletion
+            os.remove(DB_PATH)
+            st.success("Database deleted successfully!")
+            # Optional: Rerun to refresh the UI state
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error occurred while deleting: {e}")
+    else:
+        st.warning("File not found. It might have already been deleted.")
+        
 def load_drive():
     # ================= CONFIG =================
     CLIENT_CONFIG = {
