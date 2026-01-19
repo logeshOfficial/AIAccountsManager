@@ -130,4 +130,4 @@ def read_db():
     
     conn.close()
 
-    return df if df else None
+    return df 
