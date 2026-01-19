@@ -150,7 +150,7 @@ def insert_invoice(invoice):
             invoice.get("invoice_number"),
             invoice.get("invoice_date"),
             invoice.get("gst_number"),
-            invoice.get("vendor_name"),
+            invoice.get("vendor_name", ""),
             invoice.get("description"),
             float(invoice.get("total_amount", 0)),
             json.dumps(invoice.get("raw_text", ""))
