@@ -7,6 +7,7 @@ import os
 
 if st.button("delete"):
     DB_PATH = "/mount/src/invoices.db"
+    
     if os.path.exists(DB_PATH):
         try:
             # 3. Perform the deletion
