@@ -2,6 +2,7 @@ import streamlit as st
 from google_auth_oauthlib.flow import Flow
 import db
 import streamlit as st
+import load_files_from_gdrive
 
 def load_drive():
     # ================= CONFIG =================
@@ -49,7 +50,6 @@ def load_drive():
         )
 
         flow.fetch_token(code=code)
-
         st.session_state["creds"] = flow.credentials
 
         # Clean URL
@@ -64,7 +64,6 @@ def load_drive():
         if "creds" in st.session_state:
             st.success("Welcome! You are logged in.")
             return st.session_state["creds"]
-
         return None
 
     # -----------------------------
@@ -85,11 +84,12 @@ def load_drive():
         handle_callback()
         start_oauth_flow()
         st.stop()
-
-    
+        
     if st.button("🚪 Logout"):
         logout()
 
+    load_files_from_gdrive.initiate_drive(creds)
+    
 import streamlit as st
 view = st.query_params.get("view", "home")
 
