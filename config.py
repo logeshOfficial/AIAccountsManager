@@ -9,6 +9,7 @@ Each invoice should be converted into one or more dictionaries with these keys:
 - vendor_name (if found, else empty)
 - total_amount (the grand total including all taxes, shipping, etc.)
 - description (a short 2–3 word category describing the purpose of the invoice, inferred from product/item names)
+- raw_text 
 
 🧠 INVOICE DESCRIPTION RULES:
 - Use the product name or description name or item name to guess the purpose of the invoice.
