@@ -153,9 +153,9 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
                 for entry in filtered_data:
                     entry["raw_text"] = entry.get("raw_text", "")  # optional
-                    st.write(entry)
                     insert_invoice(entry)
 
+                st.dataframe(entry)
                 # batch_wise_filtered_data.append(filtered_data)
                 
             except Exception as e:
