@@ -207,9 +207,9 @@ if "code" in st.query_params:
         code = st.query_params["code"]
         state = st.query_params.get("state")
 
-        # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-        #     st.error("Invalid OAuth state. Please login again.")
-        #     st.stop()
+        if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
+            st.error("Invalid OAuth state. Please login again.")
+            st.stop()
 
         flow = Flow.from_client_config(
             CLIENT_CONFIG,
