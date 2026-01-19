@@ -30,7 +30,7 @@ if st.button("delete"):
         
         # 3. Commit the changes
         conn.commit()
-        print("Table 'invoices' has been dropped successfully.")
+        st.info("Table 'invoices' has been dropped successfully.")
         
     except Exception as e:
         print(f"An error occurred: {e}")
