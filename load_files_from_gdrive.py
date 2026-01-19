@@ -159,7 +159,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 # batch_wise_filtered_data.append(filtered_data)
                 
             except Exception as e:
-                print(f"❌ Failed to parse or extract batch: {e}")
+                st.error(f"❌ Failed to parse or extract batch: {e}")
                 with open("failed_batch.json", "w", encoding="utf-8") as f:
                     f.write(json.dumps(filtered_batch_data, indent=2))
                 continue
