@@ -73,8 +73,8 @@ else:
     #     </a>""", 
     #     unsafe_allow_html=True
     # )
-    st.markdown(f'<a href="{auth_url}" target="_self">Login with Google</a>', unsafe_allow_html=True)
+    # st.markdown(f'<a href="{auth_url}" target="_self">Login with Google</a>', unsafe_allow_html=True)
     # Using a link styled as a button
-    # st.link_button("Login with Google", auth_url)
+    st.link_button("Login with Google", auth_url)
     
     
