@@ -11,7 +11,6 @@ import json
 from drive_manager import DriveManager
 from invoice_processor import InvoiceProcessor
 from google.api_core.exceptions import ResourceExhausted
-from googleapiclient.http import MediaFileUpload
 import config
 import db
 

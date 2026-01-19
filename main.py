@@ -1,30 +1,9 @@
 # import streamlit as st
 # from google_auth_oauthlib.flow import Flow
-# from googleapiclient.discovery import build
-# from google.oauth2.credentials import Credentials
-# from google.auth.transport.requests import Request
 # import db
-# import json
-# import load_files_from_gdrive
-
-
-# import os
 # import streamlit as st
 
-# DB_PATH = "/mount/src/oauth_tokens.db"
-
-# if st.button("delete_token_db"):
-#     if os.path.exists(DB_PATH):
-#         os.remove(DB_PATH)
-#         st.success("✅ token.db deleted successfully")
-#     else:
-#         st.info("ℹ️ token.db not found")
-
 # def load_drive():
-#     # 👤 TEMP USER ID
-#     # In production → use Auth0 / Streamlit auth user id
-#     USER_ID = "default_user"
-
 #     # ================= CONFIG =================
 #     CLIENT_CONFIG = {
 #         "web": {
@@ -35,10 +14,7 @@
 #             "redirect_uris": [st.secrets["REDIRECT_URI"]],
 #         }
 #     }
-#     SCOPES = [
-#     "https://www.googleapis.com/auth/drive",
-#     "https://www.googleapis.com/auth/drive.readonly",
-#         ]
+#     SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 #     # ================= HELPERS =================
 #     def start_oauth_flow():
@@ -62,7 +38,7 @@
 #     # -----------------------------
 #     def handle_callback():
 #         code = st.query_params.get("code")
-
+            
 #         if not code:
 #             return None
 
@@ -73,12 +49,8 @@
 #         )
 
 #         flow.fetch_token(code=code)
-#         creds = flow.credentials
 
-#         # ✅ STORE IN SQLITE
-#         db.save_token(USER_ID, creds.to_json())
-
-#         st.session_state["creds"] = creds
+#         st.session_state["creds"] = flow.credentials
 
 #         # Clean URL
 #         st.query_params.clear()
@@ -90,25 +62,8 @@
 #     def load_credentials():
 #         # 1️⃣ Session cache
 #         if "creds" in st.session_state:
+#             st.success("Welcome! You are logged in.")
 #             return st.session_state["creds"]
-
-#         # 2️⃣ SQLite
-#         token_json = db.load_token(USER_ID)
-#         st.write(token_json)
-#         if token_json:
-#             info = json.loads(token_json)
-
-#             creds = Credentials.from_authorized_user_info(
-#                 info=info,
-#                 scopes=SCOPES,
-#             )
-
-#             if creds.expired and creds.refresh_token:
-#                 creds.refresh(Request())
-#                 db.save_token(USER_ID, creds.to_json())
-
-#             st.session_state["creds"] = creds
-#             return creds
 
 #         return None
 
@@ -116,7 +71,6 @@
 #     # LOGOUT (OPTIONAL BUT GOOD)
 #     # -----------------------------
 #     def logout():
-#         db.delete_token(USER_ID)
 #         st.session_state.clear()
 #         st.success("Logged out")
 #         st.rerun()
@@ -132,22 +86,9 @@
 #         start_oauth_flow()
 #         st.stop()
 
-#     # -----------------------------
-#     # AUTHENTICATED AREA
-#     # -----------------------------
-#     st.success("✅ Logged in successfully")
     
 #     if st.button("🚪 Logout"):
 #         logout()
-
-#     load_files_from_gdrive.initiate_drive(creds)
-#     # # Example Google Drive call
-#     # drive = build("drive", "v3", credentials=creds)
-#     # files = drive.files().list(fields="files(name)").execute()
-
-#     # st.write("📁 Your Drive files:")
-#     # for f in files.get("files", []):
-#     #     st.write("•", f["name"])
 
 # import streamlit as st
 # view = st.query_params.get("view", "home")
@@ -166,74 +107,85 @@
 #     st.title("📂 Drive Manager")
 #     load_drive()
 
+
 import streamlit as st
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
+import requests
+from urllib.parse import urlencode
 
-CLIENT_CONFIG = {
-    "web": {
-        "client_id": st.secrets["GOOGLE_CLIENT_ID"],
-        "client_secret": st.secrets["GOOGLE_CLIENT_SECRET"],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "redirect_uris": [st.secrets["REDIRECT_URI"]],
+# Configuration (Ensure these are set in your .streamlit/secrets.toml)
+CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
+CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
+REDIRECT_URI = st.secrets["REDIRECT_URI"]
+
+def get_authorization_url():
+    # Google Authorization Endpoint
+    base_url = "https://accounts.google.com/o/oauth2/v2/auth"
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        # Added openid and email scopes for Google
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account"
     }
-}
+    return f"{base_url}?{urlencode(params)}"
 
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+def exchange_code_for_token(code):
+    # Google Token Endpoint
+    token_url = "https://oauth2.googleapis.com/token"
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+    response = requests.post(token_url, data=data)
+    return response.json()
 
-st.title("🌟 Google Drive OAuth (Correct)")
+# Main app logic
+st.title("Google OAuth Example")
 
-# ---------------- START LOGIN ----------------
-def start_login():
-    flow = Flow.from_client_config(
-        CLIENT_CONFIG,
-        scopes=SCOPES,
-        redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
-    )
-    auth_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="false",
-        prompt="consent",
-    )
-    
-    st.write("state: ", state)
-    st.session_state["oauth_state"] = state
-    st.markdown(f"[Login with Google]({auth_url})")
-
-# ---------------- CALLBACK ----------------
+# 1. Handle the redirect from Google (when 'code' is in the URL)
 if "code" in st.query_params:
-    try:
-        code = st.query_params["code"]
-        state = st.query_params.get("state")
-
-        if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-            st.error("Invalid OAuth state. Please login again.")
-            st.stop()
-
-        flow = Flow.from_client_config(
-            CLIENT_CONFIG,
-            scopes=SCOPES,
-            redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
-            state=state,
-        )
-
-        flow.fetch_token(code=code)
-        st.session_state["creds"] = flow.credentials
-        st.success("✅ Logged in successfully")
-        st.query_params.clear()
+    code = st.query_params["code"]
     
-    except Exception as e:
-        st.error(e)
+    if "access_token" not in st.session_state:
+        token_data = exchange_code_for_token(code)
+        if "access_token" in token_data:
+            st.session_state.access_token = token_data.get("access_token")
+            # Google also provides an id_token for user info
+            st.session_state.id_token = token_data.get("id_token")
+        else:
+            st.error("Authentication failed. Check your secrets.")
+    
+    # Clean up the URL by removing the code and rerun
+    st.query_params.clear()
+    st.rerun()
 
-# ---------------- LOGGED IN ----------------
-if "creds" in st.session_state:
-    st.success("Welcome! You are logged in.")
-
+# 2. Display Login or Authenticated UI
+if "access_token" in st.session_state:
+    st.success("Authenticated with Google!")
+    st.write(f"Access Token: `{st.session_state.access_token[:15]}...`")
+    
     if st.button("Logout"):
-        st.session_state.clear()
+        del st.session_state.access_token
         st.rerun()
-
-# ---------------- NOT LOGGED IN ----------------
 else:
-    start_login()
+    st.write("Welcome! Please sign in to continue.")
+    auth_url = get_authorization_url()
+    # Using a link styled as a button
+    st.link_button("Login with Google", auth_url)
+    
+    
+    
+    
+    
+# from streamlit_oauth import OAuth2Component
+
+# oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_URL, TOKEN_URL)
+# result = oauth2.authorize_button("Login", REDIRECT_URI, SCOPE)
+
+# if result:
+#     st.write(result)
