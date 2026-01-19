@@ -203,8 +203,8 @@ def start_login():
 
 # ---------------- CALLBACK ----------------
 if "code" in st.query_params:
-    code = st.query_params["code"][0]
-    state = st.query_params.get("state", [None])[0]
+    code = st.query_params["code"]
+    state = st.query_params.get("state")
 
     # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
     #     st.error("Invalid OAuth state. Please login again.")
