@@ -65,11 +65,7 @@ if "access_token" in st.session_state:
 else:
     st.write("Welcome! Please sign in to continue.")
     auth_url = get_authorization_url()
-    if st.button("Login with Google"):
-        # This script runs once the button is clicked
-        js = f"window.top.location.href = '{auth_url}'"
-        st.components.v1.html(f"<script>{js}</script>", height=0)
-    
-    # st.link_button("Login with Google", auth_url)
+   
+    st.link_button("Login with Google", auth_url)
     
     
