@@ -189,7 +189,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
             # with open(tmp_state, "w", encoding="utf-8") as f:
             #     json.dump(list(processed_ids), f)
-
+    
             # os.replace(tmp_state, STATE_FILE)
 
             batch_extracted.clear()
@@ -200,6 +200,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             not_valid_file_paths.clear()
             
             st.write(db.read_db())
+            
     except Exception as e:
         print("❌Error:", str(e))
 

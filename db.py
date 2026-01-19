@@ -125,12 +125,9 @@ def insert_invoice(invoice):
 def read_db():
     init_db()
     conn = get_connection()
-    cur = conn.cursor()
 
-    cur.execute("""
-        SELECT * FROM invoices""")
-
-    row = cur.fetchall()
+    df = pd.read_sql("SELECT * FROM invoices", conn)
+    
     conn.close()
 
-    return row[0] if row else None
+    return df if df else None
