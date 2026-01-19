@@ -196,6 +196,8 @@ def start_login():
         include_granted_scopes="true",
         prompt="consent",
     )
+    
+    st.write(state)
     st.session_state["oauth_state"] = state
     st.markdown(f"[Login with Google]({auth_url})")
 
