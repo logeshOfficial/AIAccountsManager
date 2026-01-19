@@ -203,24 +203,28 @@ def start_login():
 
 # ---------------- CALLBACK ----------------
 if "code" in st.query_params:
-    code = st.query_params["code"]
-    state = st.query_params.get("state")
+    try:
+        code = st.query_params["code"]
+        state = st.query_params.get("state")
 
-    # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-    #     st.error("Invalid OAuth state. Please login again.")
-    #     st.stop()
+        # if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
+        #     st.error("Invalid OAuth state. Please login again.")
+        #     st.stop()
 
-    flow = Flow.from_client_config(
-        CLIENT_CONFIG,
-        scopes=SCOPES,
-        redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
-        state=state,
-    )
+        flow = Flow.from_client_config(
+            CLIENT_CONFIG,
+            scopes=SCOPES,
+            redirect_uri=CLIENT_CONFIG["web"]["redirect_uris"][0],
+            state=state,
+        )
 
-    flow.fetch_token(code=code)
-    st.session_state["creds"] = flow.credentials
-    st.success("✅ Logged in successfully")
-    st.query_params.clear()
+        flow.fetch_token(code=code)
+        st.session_state["creds"] = flow.credentials
+        st.success("✅ Logged in successfully")
+        st.query_params.clear()
+    
+    except Exception as e:
+        st.error(e)
 
 # ---------------- LOGGED IN ----------------
 if "creds" in st.session_state:
