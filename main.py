@@ -4,21 +4,38 @@ import db
 import streamlit as st
 import load_files_from_gdrive
 import os
+import sqlite3
 
 if st.button("delete"):
     DB_PATH = "/mount/src/invoices.db"
     
-    if os.path.exists(DB_PATH):
-        try:
-            # 3. Perform the deletion
-            os.remove(DB_PATH)
-            st.success("Database deleted successfully!")
-            # Optional: Rerun to refresh the UI state
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error occurred while deleting: {e}")
-    else:
-        st.warning("File not found. It might have already been deleted.")
+    # if os.path.exists(DB_PATH):
+    #     try:
+    #         # 3. Perform the deletion
+    #         os.remove(DB_PATH)
+    #         st.success("Database deleted successfully!")
+    #         # Optional: Rerun to refresh the UI state
+    #         st.rerun()
+    #     except Exception as e:
+    #         st.error(f"Error occurred while deleting: {e}")
+    # else:
+    #     st.warning("File not found. It might have already been deleted.")
+    try:
+        # 1. Connect to the database
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+
+        # 2. Execute the DROP command
+        cur.execute("DROP TABLE IF EXISTS invoices")
+        
+        # 3. Commit the changes
+        conn.commit()
+        print("Table 'invoices' has been dropped successfully.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        conn.close()
         
 def load_drive():
     # ================= CONFIG =================
