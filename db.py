@@ -107,7 +107,7 @@ def init_db():
             file_name TEXT,
             invoice_number TEXT,
             invoice_date TEXT,
-            gst_number TEXT
+            gst_number TEXT,
             vendor_name TEXT,
             description TEXT,
             total_amount REAL,
