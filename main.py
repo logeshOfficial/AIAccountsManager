@@ -65,16 +65,22 @@ if "access_token" in st.session_state:
 else:
     st.write("Welcome! Please sign in to continue.")
     auth_url = get_authorization_url()
-    # st.markdown(
-    #     f"""<a href="{auth_url}" target="_self" style="text-decoration: none;">
-    #         <button style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
-    #             Login with Google
-    #         </button>
-    #     </a>""", 
-    #     unsafe_allow_html=True
-    # )
-    # st.markdown(f'<a href="{auth_url}" target="_self">Login with Google</a>', unsafe_allow_html=True)
-    # Using a link styled as a button
-    st.link_button("Login with Google", auth_url)
+    login_button_html = f"""
+        <a href="{auth_url}" target="_top">
+            <button style="
+                background-color: #4CAF50; 
+                color: white; 
+                padding: 10px 20px; 
+                border: none; 
+                border-radius: 5px; 
+                cursor: pointer;
+                font-size: 16px;">
+                Login with Google
+            </button>
+        </a>
+    """
+    st.markdown(login_button_html, unsafe_allow_html=True)
+    
+    # st.link_button("Login with Google", auth_url)
     
     
