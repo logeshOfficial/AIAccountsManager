@@ -180,7 +180,7 @@ CLIENT_CONFIG = {
     }
 }
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 st.title("🌟 Google Drive OAuth (Correct)")
 
