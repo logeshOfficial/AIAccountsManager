@@ -141,7 +141,7 @@ def insert_invoice(invoice):
             total_amount,
             raw_text
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """, (
             invoice["_file"]["id"],
             invoice["_file"]["name"],
