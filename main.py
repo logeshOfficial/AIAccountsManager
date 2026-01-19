@@ -65,21 +65,10 @@ if "access_token" in st.session_state:
 else:
     st.write("Welcome! Please sign in to continue.")
     auth_url = get_authorization_url()
-    login_button_html = f"""
-        <a href="{auth_url}" target="_top">
-            <button style="
-                background-color: #4CAF50; 
-                color: white; 
-                padding: 10px 20px; 
-                border: none; 
-                border-radius: 5px; 
-                cursor: pointer;
-                font-size: 16px;">
-                Login with Google
-            </button>
-        </a>
-    """
-    st.markdown(login_button_html, unsafe_allow_html=True)
+    if st.button("Login with Google"):
+        # This script runs once the button is clicked
+        js = f"window.top.location.href = '{auth_url}'"
+        st.components.v1.html(f"<script>{js}</script>", height=0)
     
     # st.link_button("Login with Google", auth_url)
     
