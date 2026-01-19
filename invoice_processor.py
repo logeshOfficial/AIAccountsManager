@@ -23,14 +23,11 @@ class InvoiceProcessor:
         self.reader = None
 
         self.year_month_data = defaultdict(lambda: defaultdict(list))
-    
-    # @st.cache_resource
-    # def get_easyocr_reader():
-    #     import easyocr
-    #     return easyocr.Reader(['en'], gpu=False, verbose=False)
         
     # ================= LLM Call =================
     def safe_json_load(self, text):
+        if not text or not text.strip():
+            raise ValueError("LLM returned empty response")
         try:
             return json.loads(text)
         except:
@@ -68,19 +65,7 @@ class InvoiceProcessor:
             return float(total) > 0
         except:
             return False
-    
-    # def is_valid_invoice(self, total):
-    #     try:
-    #         if not total or float(total) == 0.0:
-    #             return False
-            
-    #         return True
         
-    #     except Exception as e:
-    #         print("is_not_valid(expection): ", str(e))
-    #         print("Exception: ", str(e))
-    #         return False
-
     def create_and_upload_excel(self,
     drive_manager,
     output_folder_id,

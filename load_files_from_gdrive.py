@@ -170,7 +170,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             # Move processed files in Drive        
             drive_manager.move_files_drive(
                 valid_file_paths,
-                dest_dir="scanned_docs",
+                dest_dir="valid_docs",
                 drive_dirs=DRIVE_DIRS
             )
             time.sleep(2) 
@@ -182,16 +182,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             
             processed_files += len(batch)
             progress.progress(min(processed_files / total_files, 1.0))
-
-            # for f in valid_file_paths + not_valid_file_paths:
-            #     processed_ids.add(f["id"])
-
-            # tmp_state = STATE_FILE + ".tmp"
-
-            # with open(tmp_state, "w", encoding="utf-8") as f:
-            #     json.dump(list(processed_ids), f)
-
-            # os.replace(tmp_state, STATE_FILE)
 
             batch_extracted.clear()
             batch_data.clear()
@@ -243,14 +233,11 @@ def initiate_drive(creds):
         
         DRIVE_DIRS = {
             "project_id": root_folder_id,
-            "scanned_docs": drive_manager.get_or_create_folder(
+            "valid_docs": drive_manager.get_or_create_folder(
                 "scanned_docs", root_folder_id
             ),
             "invalid_docs": drive_manager.get_or_create_folder(
                 "invalid_docs", root_folder_id
-            ),
-            "output": drive_manager.get_or_create_folder(
-                "output", root_folder_id
             ),
         }
 
