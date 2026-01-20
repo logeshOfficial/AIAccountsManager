@@ -4,9 +4,8 @@ import streamlit as st
 import load_files_from_gdrive
 from googleapiclient.discovery import build
 
-def load_drive():
-    # ================= CONFIG =================
-    CLIENT_CONFIG = {
+def _client_config():
+    return {
         "web": {
             "client_id": st.secrets["GOOGLE_CLIENT_ID"],
             "client_secret": st.secrets["GOOGLE_CLIENT_SECRET"],
@@ -15,45 +14,38 @@ def load_drive():
             "redirect_uris": [st.secrets["REDIRECT_URI"]],
         }
     }
+
+def _scopes():
     # Drive + identity (to enforce per-user data isolation server-side)
-    SCOPES = [
+    return [
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/drive",
     ]
 
-    # ================= HELPERS =================
-    def start_oauth_flow():
+def logout():
+    st.session_state.clear()
+    st.success("Logged out")
+    st.rerun()
+
+def ensure_google_login(show_ui: bool = True):
+    """
+    Ensures the user is logged into Google and we have creds + user_email.
+    If not logged in and show_ui=True, renders the login link on the current page.
+
+    Returns:
+        creds (or None)
+    """
+    if "creds" in st.session_state:
+        return st.session_state["creds"]
+
+    code = st.query_params.get("code")
+    if code:
         flow = Flow.from_client_config(
-            CLIENT_CONFIG,
-            scopes=SCOPES,
+            _client_config(),
+            scopes=_scopes(),
             redirect_uri=st.secrets["REDIRECT_URI"],
         )
-
-        auth_url, _ = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="false",
-            prompt="consent",
-        )
-
-        st.markdown("### 🔐 Google Login")
-        st.markdown(f"[Click here to login with Google]({auth_url})")
-        
-    # -----------------------------
-    # HANDLE OAUTH CALLBACK
-    # -----------------------------
-    def handle_callback():
-        code = st.query_params.get("code")
-            
-        if not code:
-            return None
-
-        flow = Flow.from_client_config(
-            CLIENT_CONFIG,
-            scopes=SCOPES,
-            redirect_uri=st.secrets["REDIRECT_URI"],
-        )
-
         flow.fetch_token(code=code)
         st.session_state["creds"] = flow.credentials
 
@@ -63,42 +55,32 @@ def load_drive():
             info = oauth2.userinfo().get().execute()
             st.session_state["user_email"] = (info or {}).get("email", "")
         except Exception:
-            # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
             st.session_state["user_email"] = ""
 
-        # Clean URL
         st.query_params.clear()
         st.rerun()
 
-    # -----------------------------
-    # LOAD CREDENTIALS SAFELY
-    # -----------------------------
-    def load_credentials():
-        # 1️⃣ Session cache
-        if "creds" in st.session_state:
-            st.success("Welcome! You are logged in.")
-            return st.session_state["creds"]
+    if not show_ui:
         return None
 
-    # -----------------------------
-    # LOGOUT (OPTIONAL BUT GOOD)
-    # -----------------------------
-    def logout():
-        st.session_state.clear()
-        st.success("Logged out")
-        st.rerun()
+    flow = Flow.from_client_config(
+        _client_config(),
+        scopes=_scopes(),
+        redirect_uri=st.secrets["REDIRECT_URI"],
+    )
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="false",
+        prompt="consent",
+    )
 
-    # -----------------------------
-    # APP ENTRY POINT
-    # -----------------------------
+    st.markdown("### 🔐 Google Login")
+    st.markdown(f"[Click here to login with Google]({auth_url})")
+    st.stop()
 
-    creds = load_credentials()
+def load_drive():
+    creds = ensure_google_login(show_ui=True)
 
-    if not creds:
-        handle_callback()
-        start_oauth_flow()
-        st.stop()
-        
     if st.button("🚪 Logout"):
         logout()
 
