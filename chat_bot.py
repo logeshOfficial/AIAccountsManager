@@ -10,7 +10,10 @@ import ai_models
 @st.cache_resource
 def get_ai_client():
     try:
-        return ai_models.initiate_huggingface_model(st.secrets["api_key"])
+        return ai_models.initiate_huggingface_model(
+            api_key=st.secrets.get("api_key"),
+            base_url=st.secrets.get("base_url", "https://router.huggingface.co/v1")
+        )
     except Exception as e:
         st.error(f"Error initializing AI client: {e}")
         return None
@@ -20,10 +23,7 @@ def llm_call(prompt: str) -> str:
     if not client:
         return "{}"
 
-    # Use a standard HF model or one from secrets. 
-    # The user was setting model=api_key which is wrong.
-    # We'll use a strong default for invoice extraction.
-    OPENAI_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
+    OPENAI_MODEL = st.secrets.get("model", "meta-llama/Meta-Llama-3-8B-Instruct")
 
     try:
         response = client.chat.completions.create(
