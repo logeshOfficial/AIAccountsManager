@@ -16,8 +16,7 @@ def get_ai_client():
         return None
 
 def llm_call(prompt: str) -> str:
-    client_info = get_ai_client()
-    client = client_info["client"]
+    client = get_ai_client()
     OPENAI_MODEL = st.secrets["api_key"]
 
     response = client.chat.completions.create(
