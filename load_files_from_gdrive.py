@@ -123,12 +123,16 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
                 from db import insert_invoice
 
+                user_id = st.session_state.get("user_email", "")
+                if not user_id:
+                    raise RuntimeError("Missing logged-in user email; cannot safely store invoices without tenant id.")
+
                 for entry in filtered_data:
                     entry["raw_text"] = entry.get("raw_text", "")  # optional
                     entry["vendor_name"] = entry.get("vendor_name", "")
                     entry["invoice_date"] = entry.get("invoice_date", "")  # Ensure invoice_date is always set
                     st.info(entry)
-                    insert_invoice(entry)
+                    insert_invoice(entry, user_id=user_id)
 
                 # batch_wise_filtered_data.append(filtered_data)
                 
@@ -164,7 +168,8 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             valid_file_paths.clear()
             not_valid_file_paths.clear()
             
-            st.dataframe(db.read_db())
+            # Show only current user's data here
+            st.dataframe(db.read_db(user_id=st.session_state.get("user_email", ""), is_admin=False))
             
     except Exception as e:
         print("❌Error:", str(e))

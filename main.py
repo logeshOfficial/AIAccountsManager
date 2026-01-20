@@ -11,6 +11,14 @@ st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"vie
 if view == "home":
     st.title("🏠 Home")
 
+    user_email = st.session_state.get("user_email", "")
+    is_admin = (user_email or "").strip().lower() == db.ADMIN_EMAIL.lower()
+
+    if user_email:
+        st.caption(f"Signed in as: {user_email}" + (" (admin)" if is_admin else ""))
+    else:
+        st.warning("Not signed in. Go to **Drive_Manager** and login to see your invoices.")
+
     with st.expander("⚠️ Danger zone", expanded=False):
         st.write("This will permanently delete the local invoices database and all stored invoices.")
         confirm_drop = st.checkbox("I understand — delete invoices.db", value=False)
@@ -24,7 +32,8 @@ if view == "home":
             else:
                 st.error(msg)
 
-    df = db.read_db()
+    # Security: normal users only see their own rows; admin sees everything.
+    df = db.read_db(user_id=user_email, is_admin=is_admin)
     st.dataframe(df)
     
 elif view == "chat":

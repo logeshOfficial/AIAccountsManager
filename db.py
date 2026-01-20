@@ -5,6 +5,7 @@ import os
 from typing import Tuple
 
 DB_PATH = "/mount/src/invoices.db"
+ADMIN_EMAIL = "iamlogeshwaran.info@gmail.com"
 
 
 def get_connection():
@@ -21,6 +22,7 @@ def init_db():
         cur.execute("""
         CREATE TABLE IF NOT EXISTS invoices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
             file_id TEXT,
             file_name TEXT,
             invoice_number TEXT,
@@ -34,6 +36,14 @@ def init_db():
         )
         """)
 
+        # Lightweight migration: if DB already existed without user_id, add it.
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(invoices)").fetchall()]
+        if "user_id" not in cols:
+            cur.execute("ALTER TABLE invoices ADD COLUMN user_id TEXT")
+
+        # Index for per-user queries
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)")
+
         conn.commit()
     
     except Exception as e:
@@ -42,7 +52,7 @@ def init_db():
     finally:
         conn.close()
         
-def insert_invoice(invoice):
+def insert_invoice(invoice, user_id: str):
     init_db()
     
     try:
@@ -51,6 +61,7 @@ def insert_invoice(invoice):
 
         cur.execute("""
         INSERT INTO invoices (
+            user_id,
             file_id,
             file_name,
             invoice_number,
@@ -61,8 +72,9 @@ def insert_invoice(invoice):
             total_amount,
             raw_text
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            user_id,
             invoice["_file"]["id"],
             invoice["_file"]["name"],
             invoice.get("invoice_number"),
@@ -82,13 +94,23 @@ def insert_invoice(invoice):
     finally:
         conn.close()
     
-def read_db():
+def read_db(user_id: str | None = None, is_admin: bool = False):
     init_db()
     
     try:
         conn = get_connection()
 
-        df = pd.read_sql("SELECT * FROM invoices", conn)
+        if is_admin:
+            df = pd.read_sql("SELECT * FROM invoices ORDER BY created_at DESC", conn)
+        else:
+            if not user_id:
+                df = pd.DataFrame([])
+            else:
+                df = pd.read_sql(
+                    "SELECT * FROM invoices WHERE user_id = ? ORDER BY created_at DESC",
+                    conn,
+                    params=(user_id,),
+                )
         
         conn.close()
 

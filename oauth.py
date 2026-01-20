@@ -2,6 +2,7 @@ import streamlit as st
 from google_auth_oauthlib.flow import Flow
 import streamlit as st
 import load_files_from_gdrive
+from googleapiclient.discovery import build
 
 def load_drive():
     # ================= CONFIG =================
@@ -14,7 +15,12 @@ def load_drive():
             "redirect_uris": [st.secrets["REDIRECT_URI"]],
         }
     }
-    SCOPES = ["https://www.googleapis.com/auth/drive"]
+    # Drive + identity (to enforce per-user data isolation server-side)
+    SCOPES = [
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/drive",
+    ]
 
     # ================= HELPERS =================
     def start_oauth_flow():
@@ -50,6 +56,15 @@ def load_drive():
 
         flow.fetch_token(code=code)
         st.session_state["creds"] = flow.credentials
+
+        # Fetch and store user email for tenant isolation
+        try:
+            oauth2 = build("oauth2", "v2", credentials=flow.credentials)
+            info = oauth2.userinfo().get().execute()
+            st.session_state["user_email"] = (info or {}).get("email", "")
+        except Exception:
+            # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
+            st.session_state["user_email"] = ""
 
         # Clean URL
         st.query_params.clear()
