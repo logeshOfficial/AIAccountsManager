@@ -11,13 +11,17 @@ st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"vie
 if view == "home":
     st.title("🏠 Home")
 
+    # Allow login directly from Home page
+    if "creds" not in st.session_state:
+        oauth.ensure_google_login(show_ui=True)
+
     user_email = st.session_state.get("user_email", "")
     is_admin = (user_email or "").strip().lower() == db.ADMIN_EMAIL.lower()
 
     if user_email:
         st.caption(f"Signed in as: {user_email}" + (" (admin)" if is_admin else ""))
     else:
-        st.warning("Not signed in. Go to **Drive_Manager** and login to see your invoices.")
+        st.warning("Could not fetch your Google email. Please logout and login again.")
 
     with st.expander("⚠️ Danger zone", expanded=False):
         st.write("This will permanently delete the local invoices database and all stored invoices.")
