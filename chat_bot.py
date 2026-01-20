@@ -21,7 +21,7 @@ def llm_call(prompt: str) -> str:
 
     response = client.responses.create(
         model=OPENAI_MODEL,
-        messages=[
+        input=[
             {"role": "system", "content": "You are a precise financial invoice assistant."},
             {"role": "user", "content": prompt}
         ],
