@@ -1,9 +1,10 @@
 import sqlite3
 import json 
 import pandas as pd
+import os
+from typing import Tuple
 
 DB_PATH = "/mount/src/invoices.db"
-TOKEN_DB_PATH = "/mount/src/oauth_tokens.db"
 
 
 def get_connection():
@@ -11,89 +12,6 @@ def get_connection():
         return sqlite3.connect(DB_PATH, check_same_thread=False)
     except Exception as e:
         raise Exception("Error while get_connection: ", e)
-    
-def get_connection_for_token_db():
-    try:
-        return sqlite3.connect(TOKEN_DB_PATH, check_same_thread=False)
-    except Exception as e:
-        raise Exception("Error while get_connection_for_token_db: ", e)
-
-def init_token_db():
-    try:
-        conn = get_connection_for_token_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS google_tokens (
-                user_id TEXT PRIMARY KEY,
-                token_json TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-        
-    except Exception as e:
-        raise Exception("Error while get_connection_for_token_db: ", e)
-
-    finally:  
-        conn.close()
-
-def save_token(user_id: str, token_json: str):
-    init_token_db()
-    
-    try:
-        conn = get_connection_for_token_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            INSERT OR REPLACE INTO google_tokens (user_id, token_json)
-            VALUES (?, ?)
-        """, (user_id, token_json))
-
-        conn.commit()
-    except Exception as e:
-        raise Exception("Error while init_db: ", e)
-    finally:
-        conn.close()
-
-def load_token(user_id: str):
-    init_token_db()
-    
-    try:
-        conn = get_connection_for_token_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT token_json FROM google_tokens WHERE user_id = ?
-        """, (user_id,))
-
-        row = cur.fetchone()
-    
-    except Exception as e:
-        raise Exception("Error while init_db: ", e)
-    
-    finally: 
-        conn.close()
-
-        return row[0] if row else None
-
-def delete_token(user_id: str):
-    init_token_db()
-    
-    try:
-        conn = get_connection_for_token_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            DELETE FROM google_tokens WHERE user_id = ?
-        """, (user_id,))
-
-        conn.commit()
-        
-    except Exception as e:
-        raise Exception("Error while delete_token: ", e)
-    
-    finally:
-        conn.close()
     
 def init_db():
     try:
@@ -179,3 +97,33 @@ def read_db():
     
     finally:
         return df 
+
+def drop_invoices_db(recreate: bool = True) -> Tuple[bool, str]:
+    """
+    Deletes the invoices sqlite database file at DB_PATH.
+
+    Args:
+        recreate: If True, re-create the DB file and invoices table after deletion.
+
+    Returns:
+        (success, message)
+    """
+    # Best-effort close of any open connections happens at call sites; here we just try to delete.
+    try:
+        if os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+        else:
+            # Treat "doesn't exist" as success for idempotency
+            if recreate:
+                init_db()
+            return True, f"DB not found at {DB_PATH}. Recreated schema." if recreate else f"DB not found at {DB_PATH}."
+
+        if recreate:
+            init_db()
+            return True, f"Deleted and recreated DB at {DB_PATH}."
+
+        return True, f"Deleted DB at {DB_PATH}."
+    except PermissionError as e:
+        return False, f"Permission error deleting DB at {DB_PATH}. Is it open elsewhere? ({e})"
+    except Exception as e:
+        return False, f"Failed to delete DB at {DB_PATH}: {e}"
