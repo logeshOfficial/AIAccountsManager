@@ -114,7 +114,10 @@ def load_invoices_from_db(user_email: str) -> List[Dict[str, Any]]:
         return []
     
     try:
-        df = db.read_db(user_id=user_email)
+        # Check if user is admin (logic duplicated from main.py or db.py)
+        is_admin = (user_email or "").strip().lower() == db.ADMIN_EMAIL.lower()
+        
+        df = db.read_db(user_id=user_email, is_admin=is_admin)
         records = df.to_dict(orient="records")
         
         # Map DB columns to Chatbot Schema
