@@ -10,8 +10,6 @@ import os
 import json
 from drive_manager import DriveManager
 from invoice_processor import InvoiceProcessor
-from google.api_core.exceptions import ResourceExhausted
-import config
 import db
 
 def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS):
@@ -31,9 +29,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
     filepaths = []
     batch_data =[]
     batch_wise_filtered_data = []
-    filtered_batch_data = []
-    
-    MAX_GEMINI_DOCS = 5 
+    filtered_batch_data = [] 
 
     st.info(f"all_files: {all_files}")
     # ================= Process Selected Folder =================
@@ -93,44 +89,21 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 })   
                 
             try:
-                for j in range(0, len(filtered_batch_data), MAX_GEMINI_DOCS):
-                    chunk = filtered_batch_data[j:j + MAX_GEMINI_DOCS]
-                    
-                    chunk_texts = [item["text"] for item in chunk]
-                    
-                    
-                    for attempt in range(5):
-                        try:
-                            response = invoice_processor.client.responses.create(
-                            model=invoice_processor.OPENAI_MODEL,
-                            input=config.prompt + json.dumps(chunk_texts)
-                            )
-                            break
-                        
-                        except ResourceExhausted as e:
-                            wait = 10 + attempt * 5
-                            print(f"⏳ LLM model rate limit. Retrying in {wait}s")
-                            time.sleep(wait)
+                # Use manual parser instead of LLM
+                chunk_texts = [item["text"] for item in filtered_batch_data]
+                
+                # Parse invoices manually using regex and pattern matching
+                parsed_chunk = invoice_processor.parse_invoices_manual(chunk_texts)
+                
+                # Add file information to each parsed entry
+                for k, entry in enumerate(parsed_chunk):
+                    if k < len(filtered_batch_data):
+                        entry["_file"] = filtered_batch_data[k]["file"]
                     else:
-                        raise RuntimeError("❌ LLM failed after retries")
+                        # Fallback if indices don't match
+                        entry["_file"] = filtered_batch_data[-1]["file"] if filtered_batch_data else {}
 
-                    # st.info(response.output_text)
-                    
-                    json_output = response.output_text            
-                            
-                    if '```json' in json_output:
-                        json_output = json_output.split('```json')[-1].split('```')[0].strip()
-                    elif '```' in json_output:
-                        json_output = json_output.split('```')[-1].strip()
-                    
-                    parsed_chunk = invoice_processor.safe_json_load(json_output)
-
-                    for k, entry in enumerate(parsed_chunk):
-                        entry["_file"] = chunk[k]["file"]
-
-                    parsed_data.extend(parsed_chunk)
-                    
-                    time.sleep(randint(3, 7))
+                parsed_data.extend(parsed_chunk)
                             
                 filtered_data = []
                 
