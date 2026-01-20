@@ -9,12 +9,16 @@ import ai_models
 
 @st.cache_resource
 def get_ai_client():
-    return ai_models.initiate_huggingface_model()
+    try:
+        return ai_models.initiate_huggingface_model(st.secrets["api_key"])
+    except Exception as e:
+        st.error(f"Error initializing AI client: {e}")
+        return None
 
 def llm_call(prompt: str) -> str:
     client_info = get_ai_client()
     client = client_info["client"]
-    OPENAI_MODEL = client_info["model"]
+    OPENAI_MODEL = st.secrets["api_key"]
 
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
