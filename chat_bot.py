@@ -159,9 +159,16 @@ def filter_by_date_and_category(
         if not date_str:
             continue
 
-        try:
-            inv_date = datetime.strptime(date_str.strip(), "%b %d %Y")
-        except ValueError:
+        # Try multiple formats as DB might have mixed formats
+        inv_date = None
+        for fmt in ["%b %d %Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"]:
+            try:
+                inv_date = datetime.strptime(date_str.strip(), fmt)
+                break
+            except ValueError:
+                continue
+        
+        if not inv_date:
             continue
 
         if start_date <= inv_date <= end_date:
@@ -204,6 +211,7 @@ def extract_filter_parameters(user_input: str) -> Optional[Dict]:
     
     Notes:
     - Dates must be in 'MMM DD YYYY' format (e.g. Feb 01 2023).
+    - If a whole year is mentioned (e.g. "2025"), return the full range: "Jan 01 2025" to "Dec 31 2025".
     - If no year is specified, assume 2023 or contextually relevant.
     """
     
@@ -300,6 +308,7 @@ def run_chat_interface():
                     filtered_invoices, min_inv, max_inv = filter_by_date_and_category(
                         invoices, start, end, params.get("category")
                     )
+                    st.info(f"Filtered {len(filtered_invoices)} invoices from {start.strftime('%b %d, %Y')} to {end.strftime('%b %d, %Y')}")
                 except ValueError:
                     st.error("Date parsing failed. Please try a clearer date format.")
                     return

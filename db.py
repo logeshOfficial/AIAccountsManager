@@ -51,10 +51,31 @@ def init_db():
 
     finally:
         conn.close()
+
+def check_invoice_exists(file_id: str) -> bool:
+    """Checks if an invoice with the given file_id already exists."""
+    init_db()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM invoices WHERE file_id = ?", (file_id,))
+        exists = cur.fetchone() is not None
+        return exists
+    except Exception as e:
+        print(f"Error checking invoice existence: {e}")
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
         
 def insert_invoice(invoice, user_id: str):
     init_db()
     
+    # 1. Check for duplicates
+    if check_invoice_exists(invoice["_file"]["id"]):
+        print(f"Skipping duplicate invoice: {invoice['_file']['name']} (ID: {invoice['_file']['id']})")
+        return
+
     try:
         conn = get_connection()
         cur = conn.cursor()
