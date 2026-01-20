@@ -17,9 +17,6 @@ load_dotenv()
 
 class InvoiceProcessor:
     def __init__(self):
-        self.client = ai_models.initiate_huggingface_model(st.secrets["api_key"])
-        self.OPENAI_MODEL = st.secrets["model"]
-
         self.reader = None
 
         self.year_month_data = defaultdict(lambda: defaultdict(list))
