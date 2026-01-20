@@ -31,7 +31,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
     batch_wise_filtered_data = []
     filtered_batch_data = [] 
 
-    st.info(f"all_files: {all_files}")
     # ================= Process Selected Folder =================
     filepaths = [f for f in all_files]
 
@@ -59,7 +58,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             st.info(f"Batch_len: {len(filepaths[i:i+batch_size])}")
             batch_extracted  = invoice_processor.extractor(drive_manager.service, filepaths[i:i+batch_size])
             
-            st.info(batch_extracted)
             batch_data = []
             file_path_mapping = []
 
@@ -137,7 +135,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     entry["raw_text"] = entry.get("raw_text", "")  # optional
                     entry["vendor_name"] = entry.get("vendor_name", "")
                     entry["invoice_date"] = entry.get("invoice_date", "")  # Ensure invoice_date is always set
-                    st.info(entry)
                     insert_invoice(entry, user_id=user_id)
 
                 # batch_wise_filtered_data.append(filtered_data)
@@ -196,12 +193,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 def initiate_drive(creds):
     invoice_processor = InvoiceProcessor()
     drive_manager = DriveManager(creds)
-    
-    if st.button("Chat Bot"):
-        st.cache_data.clear()
-        st.switch_page("pages/chat_bot.py")
             
-    st.title("Accounts Manager - Google Drive")
     INPUT_DOCS = st.secrets["INPUT_DOCS"]        
 
     if st.button("Start Invoice Processing"):

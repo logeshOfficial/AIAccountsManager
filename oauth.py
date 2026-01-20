@@ -3,6 +3,7 @@ from google_auth_oauthlib.flow import Flow
 import streamlit as st
 import load_files_from_gdrive
 from googleapiclient.discovery import build
+from google.auth.exceptions import RefreshError
 
 def _client_config():
     return {
@@ -46,19 +47,24 @@ def ensure_google_login(show_ui: bool = True):
             scopes=_scopes(),
             redirect_uri=st.secrets["REDIRECT_URI"],
         )
-        flow.fetch_token(code=code)
-        st.session_state["creds"] = flow.credentials
-
-        # Fetch and store user email for tenant isolation
         try:
-            oauth2 = build("oauth2", "v2", credentials=flow.credentials)
-            info = oauth2.userinfo().get().execute()
-            st.session_state["user_email"] = (info or {}).get("email", "")
-        except Exception:
-            st.session_state["user_email"] = ""
+            flow.fetch_token(code=code)
+            st.session_state["creds"] = flow.credentials
 
-        st.query_params.clear()
-        st.rerun()
+            # Fetch and store user email for tenant isolation
+            try:
+                oauth2 = build("oauth2", "v2", credentials=flow.credentials)
+                info = oauth2.userinfo().get().execute()
+                st.session_state["user_email"] = (info or {}).get("email", "")
+            except Exception:
+                st.session_state["user_email"] = ""
+
+            st.query_params.clear()
+            st.rerun()
+        except Exception:
+            # InvalidGrant or similar (expired/used code or redirect mismatch)
+            st.warning("Google login failed (token exchange). Please try again.")
+            st.query_params.clear()
 
     if not show_ui:
         return None
