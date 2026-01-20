@@ -11,33 +11,59 @@ import ai_models
 def get_ai_client():
     try:
         return ai_models.initiate_huggingface_model(
-            api_key=st.secrets.get("api_key"),
+            api_key=st.secrets.get("openai_api_key"),
             base_url=st.secrets.get("base_url", "https://router.huggingface.co/v1")
         )
     except Exception as e:
         st.error(f"Error initializing AI client: {e}")
         return None
 
-def llm_call(prompt: str) -> str:
-    client = get_ai_client()
-    if not client:
-        return "{}"
-
-    OPENAI_MODEL = st.secrets.get("model", "meta-llama/Meta-Llama-3-8B-Instruct")
-
+@st.cache_resource
+def get_gemini_client():
     try:
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a precise financial invoice assistant."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500
-        )
-        return response.choices[0].message.content.strip()
+        return ai_models.initiate_gemini_model(st.secrets.get("gemini_api_key"))
     except Exception as e:
-        st.error(f"LLM Error: {e}")
-        return "{}"
+        return None
+
+def llm_call(prompt: str) -> str:
+    # 1. Try Primary Client (HF)
+    client = get_ai_client()
+    primary_error = None
+    
+    if client:
+        OPENAI_MODEL = st.secrets.get("openai_model", "meta-llama/Meta-Llama-3-8B-Instruct")
+        try:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a precise financial invoice assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500
+            )
+            return response.choices[0].message
+        except Exception as e:
+            primary_error = e
+            st.warning(f"Primary model failed. Switching to fallback... Error: {e}")
+
+    # 2. Fallback: Gemini
+    gemini_client = get_gemini_client()
+    if gemini_client:
+        GEMINI_MODEL_NAME = st.secrets.get("gemini_model", "gemini-1.5-flash")
+        try:
+            model = gemini_client.GenerativeModel(GEMINI_MODEL_NAME)
+            full_prompt = f"System: You are a precise financial invoice assistant.\nUser: {prompt}"
+            response = model.generate_content(full_prompt)
+            if response.text:
+                return response.text.strip()
+        except Exception as e:
+            st.error(f"Fallback model also failed: {e}")
+            if primary_error:
+                st.error(f"Original error was: {primary_error}")
+            return "{}"
+
+    st.error("All AI models failed.")
+    return "{}"
 
 @st.cache_data(show_spinner=True)
 def load_invoices_from_db(user_email: str):

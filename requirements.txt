@@ -4,14 +4,12 @@ numpy
 openpyxl
 python-dotenv
 python-dateutil
-# easyocr
 google-api-python-client 
 google-auth-httplib2
 google-auth-oauthlib 
 streamlit
 
-#google-generativeai
-#mistralai
+google-generativeai
 openai
 pillow
 pytesseract
