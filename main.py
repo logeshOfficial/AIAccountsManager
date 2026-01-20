@@ -1,6 +1,9 @@
 import streamlit as st
 import db
 import oauth
+import chat_bot
+
+st.set_page_config(page_title="Invoices AI Manager", layout="wide")
    
 view = st.query_params.get("view", "home")
 
@@ -41,7 +44,8 @@ if view == "home":
     st.dataframe(df)
     
 elif view == "chat":
-    st.title("💬 Chat Bot")
+    chat_bot.run_chat_interface()
+    
     
 elif view == "drive":
     st.title("📂 Drive Manager")

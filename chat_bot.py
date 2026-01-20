@@ -1,34 +1,21 @@
 import re
 import pandas as pd
 import json
-from dotenv import load_dotenv
-load_dotenv()  # Load from .env file
-# import google.generativeai as genai
-# from mistralai import Mistral
-import os
-import config
 from datetime import datetime
 import streamlit as st
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-from io import BytesIO
-import pandas as pd
-import streamlit as st
-from drive_manager import DriveManager
+import db
+import oauth
 import ai_models
 
-if st.button("Drive Manager"):
-    st.switch_page("pages/load_files_from_gdrive.py")
-    
-# ================= Streamlit UI =================
-st.title("Accounts Manager Chat bot")
-
-client_info = ai_models.initiate_huggingface_model()
-client = client_info["client"]
-OPENAI_MODEL = client_info["model"]
+@st.cache_resource
+def get_ai_client():
+    return ai_models.initiate_huggingface_model()
 
 def llm_call(prompt: str) -> str:
+    client_info = get_ai_client()
+    client = client_info["client"]
+    OPENAI_MODEL = client_info["model"]
+
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[
@@ -38,56 +25,48 @@ def llm_call(prompt: str) -> str:
     )
     return response.choices[0].message.content.strip()
 
-SCOPES = ['https://www.googleapis.com/auth/drive']
-
-drive_manager = DriveManager(SCOPES)
-
 @st.cache_data(show_spinner=True)
-def load_invoices_from_drive():
+def load_invoices_from_db(user_email: str):
     try:
-        creds = Credentials.from_service_account_info(st.secrets["google_service_account"], SCOPES)
-        drive_service = build("drive", "v3", credentials=creds)
-        DRIVE_PROJECT_ROOT = "Invoice_Processing"
-        OUTPUT_FOLDER_NAME = "output"
+        if not user_email:
+            return []
         
-        root_folder_id = drive_manager.get_or_create_folder(drive_service, DRIVE_PROJECT_ROOT)
+        # Read from DB as dataframe
+        df = db.read_db(user_id=user_email)
         
-        output_folder_id = drive_manager.get_or_create_folder(
-        drive_service,
-        OUTPUT_FOLDER_NAME,
-        parent_id=root_folder_id
-    )
+        # Convert to list of dicts for compatibility with existing logic
+        # format: we need 'invoice_no' key etc?
+        # db.py schema: 
+        # invoice_number -> mapped to what? 
+        # The chatbot logic uses: "invoice_no", "invoice_date", "invoice_description", "total_amount"
+        # The DB schema has: invoice_number, invoice_date, description, total_amount
         
-        query = (
-            f"'{output_folder_id}' in parents and "
-            "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
-        )
-
-        response = drive_service.files().list(
-            q=query,
-            fields="files(id, name)"
-        ).execute()
-
-        all_invoice_data = []
-
-        for file in response.get("files", []):
-            request = drive_service.files().get_media(fileId=file["id"])
-            fh = BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
-
-            done = False
-            while not done:
-                _, done = downloader.next_chunk()
-
-            fh.seek(0)
-
-            xls = pd.ExcelFile(fh)
-            for sheet in xls.sheet_names:
-                df = pd.read_excel(xls, sheet_name=sheet)
-                df = df.fillna("")
-                all_invoice_data.extend(df.to_dict(orient="records"))
-
-        return all_invoice_data
+        # Let's check filter_by_invoice_number: uses "invoice_no"
+        # filter_invoices_by_date_range_and_category: uses "invoice_date", "invoice_description", "total_amount"
+        
+        # We need to rename columns to match what the chatbot expects OR update chatbot logic.
+        # Updating the chatbot logic key names is cleaner but modifying this loader to adapt is safer for preserving logic.
+        
+        # Let's map DB columns to chatbot expected keys:
+        # invoice_number -> invoice_no
+        # description -> invoice_description
+        # total_amount -> total_amount (same)
+        # invoice_date -> invoice_date (same)
+        
+        records = df.to_dict(orient="records")
+        adapted_records = []
+        for r in records:
+            adapted_records.append({
+                "invoice_no": r.get("invoice_number", ""),
+                "invoice_date": r.get("invoice_date", ""),
+                "invoice_description": r.get("description", ""),
+                "total_amount": r.get("total_amount", 0),
+                "vendor_name": r.get("vendor_name", ""),
+                "gst_number": r.get("gst_number", ""),
+                "raw_text": r.get("raw_text", "")
+            })
+            
+        return adapted_records
     except Exception as e:
         st.error(f"Error loading invoices: {e}")
         return []
@@ -174,59 +153,77 @@ Write a clear, concise answer.
     return llm_call(prompt)
 
 # ------------------- STREAMLIT UI -------------------
-st.set_page_config(page_title="Invoice Assistant", layout="wide")
+# ------------------- STREAMLIT UI -------------------
+def run_chat_interface():
+    # st.set_page_config(page_title="Invoice Assistant", layout="wide") # Moved to main.py or handled by parent
 
-st.title("📊 Invoice Query Assistant")
-st.caption("Ask questions like: *Total office supply invoices in Feb 2013*")
+    st.title("📊 Invoice Query Assistant")
+    st.caption("Ask questions like: *Total office supply invoices in Feb 2013*")
 
-invoice_data = load_invoices_from_drive()
-
-st.success(f"Loaded {len(invoice_data)} invoices")
-
-query = st.text_input("Ask your invoice question")
-
-if st.button("🔍 Run Query") and query:
-    with st.spinner("Analyzing invoices..."):
-        params = extract_filter_parameters(query)
-
-        if not params:
-            st.error("Could not understand the query.")
+    # 1. Ensure Login
+    if "creds" not in st.session_state:
+        st.warning("Please log in to continue.")
+        oauth.ensure_google_login(show_ui=True)
+        # If ensure_google_login doesn't stop, we might need to return
+        # But usually ensure_google_login handles reruns or stops.
+        # Just in case:
+        if "creds" not in st.session_state:
             st.stop()
 
-        invoice_no = params.get("invoice_no", None)
+    user_email = st.session_state.get("user_email", "")
 
-        if invoice_no:
-            st.info(f"🔍 Looking for invoice number: {invoice_no}")
-            filtered = filter_by_invoice_number(invoice_data, invoice_no)
-            total = calculate_total_amount(filtered)
-            answer = rephrase_answer(query, filtered, total, None, None)
+    if not user_email:
+        st.error("User email not found. Please try logging in again.")
+        st.stop()
 
-        elif params["start_date"] and params["end_date"]:
-            # st.info(f"🎯 Extracted filter parameters: {params}")
-            
-            start = datetime.strptime(params["start_date"], "%b %d %Y")
-            end = datetime.strptime(params["end_date"], "%b %d %Y")
+    invoice_data = load_invoices_from_db(user_email)
 
-            filtered, min_inv, max_inv = filter_invoices_by_date_range_and_category(
-                invoice_data,
-                start,
-                end,
-                params.get("category")
-            )
+    st.success(f"Loaded {len(invoice_data)} invoices for {user_email}")
 
-            if not filtered:
-                st.warning("No invoices found for this query.")
-                st.stop()
+    query = st.text_input("Ask your invoice question")
 
-            total = calculate_total_amount(filtered)
-            answer = rephrase_answer(query, filtered, total, min_inv, max_inv)
+    if st.button("🔍 Run Query") and query:
+        with st.spinner("Analyzing invoices..."):
+            params = extract_filter_parameters(query)
 
-        else:
-            answer = rephrase_answer(query, invoice_data, 0, None, None)
-            
-        st.subheader("📌 Answer")
-        st.write(answer)
+            if not params:
+                st.error("Could not understand the query.")
+                return # Instead of st.stop() to keep UI responsive if embedded, though st.stop refers to script execution.
 
-        if filtered:
-            with st.expander("📄 View Matched Invoices"):
-                st.dataframe(pd.DataFrame(filtered))
+            invoice_no = params.get("invoice_no", None)
+
+            if invoice_no:
+                st.info(f"🔍 Looking for invoice number: {invoice_no}")
+                filtered = filter_by_invoice_number(invoice_data, invoice_no)
+                total = calculate_total_amount(filtered)
+                answer = rephrase_answer(query, filtered, total, None, None)
+
+            elif params["start_date"] and params["end_date"]:
+                # st.info(f"🎯 Extracted filter parameters: {params}")
+                
+                start = datetime.strptime(params["start_date"], "%b %d %Y")
+                end = datetime.strptime(params["end_date"], "%b %d %Y")
+
+                filtered, min_inv, max_inv = filter_invoices_by_date_range_and_category(
+                    invoice_data,
+                    start,
+                    end,
+                    params.get("category")
+                )
+
+                if not filtered:
+                    st.warning("No invoices found for this query.")
+                    return # exit this button callback
+
+                total = calculate_total_amount(filtered)
+                answer = rephrase_answer(query, filtered, total, min_inv, max_inv)
+
+            else:
+                answer = rephrase_answer(query, invoice_data, 0, None, None)
+                
+            st.subheader("📌 Answer")
+            st.write(answer)
+
+            if filtered:
+                with st.expander("📄 View Matched Invoices"):
+                    st.dataframe(pd.DataFrame(filtered))

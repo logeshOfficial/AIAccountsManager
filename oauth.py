@@ -3,7 +3,6 @@ from google_auth_oauthlib.flow import Flow
 import streamlit as st
 import load_files_from_gdrive
 from googleapiclient.discovery import build
-from google.auth.exceptions import RefreshError
 
 def _client_config():
     return {
