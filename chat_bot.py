@@ -19,14 +19,14 @@ def llm_call(prompt: str) -> str:
     client = get_ai_client()
     OPENAI_MODEL = st.secrets["api_key"]
 
-    response = client.chat.completions.create(
+    response = client.responses.create(
         model=OPENAI_MODEL,
         messages=[
             {"role": "system", "content": "You are a precise financial invoice assistant."},
             {"role": "user", "content": prompt}
         ],
     )
-    return response.choices[0].message.content.strip()
+    return response.output_text
 
 @st.cache_data(show_spinner=True)
 def load_invoices_from_db(user_email: str):
