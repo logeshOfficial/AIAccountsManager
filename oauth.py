@@ -47,6 +47,13 @@ def ensure_google_login(show_ui: bool = True):
             scopes=_scopes(),
             redirect_uri=st.secrets["REDIRECT_URI"],
         )
+<<<<<<< HEAD
+=======
+        flow.fetch_token(code=code)
+        st.session_state["creds"] = flow.credentials
+
+        # Fetch and store user email for tenant isolation
+>>>>>>> 9febd5a7a54fd4bd1a6c01ed60b3b2fc2e07cb52
         try:
             flow.fetch_token(code=code)
             st.session_state["creds"] = flow.credentials
@@ -62,10 +69,18 @@ def ensure_google_login(show_ui: bool = True):
             st.query_params.clear()
             st.rerun()
         except Exception:
+<<<<<<< HEAD
             # InvalidGrant or similar (expired/used code or redirect mismatch)
             st.warning("Google login failed (token exchange). Please try again.")
             st.query_params.clear()
 
+=======
+            st.session_state["user_email"] = ""
+
+        st.query_params.clear()
+        st.rerun()
+
+>>>>>>> 9febd5a7a54fd4bd1a6c01ed60b3b2fc2e07cb52
     if not show_ui:
         return None
 
