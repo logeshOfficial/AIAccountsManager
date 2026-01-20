@@ -115,12 +115,24 @@ class InvoiceProcessor:
                     invoice_data["invoice_number"] = match.group(1).strip()
                     break
             
-            # Extract invoice date
+            # Extract invoice date - comprehensive pattern matching
             date_patterns = [
-                r'invoice\s*date\s*:?\s*([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})',
-                r'date\s*:?\s*([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})',
-                r'bill\s*date\s*:?\s*([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})',
-                r'dated\s*:?\s*([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})',
+                # Patterns with "date" keyword and separators
+                r'invoice\s*date\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})',
+                r'date\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})',
+                r'Date\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})',
+                r'bill\s*date\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})',
+                r'dated\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})',
+                # Patterns with month names
+                r'invoice\s*date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',
+                r'date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',
+                r'Date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',
+                r'bill\s*date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',
+                r'dated\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',
+                # Patterns with month names first
+                r'invoice\s*date\s*:?\s*([A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{2,4})',
+                r'date\s*:?\s*([A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{2,4})',
+                r'Date\s*:?\s*([A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{2,4})',
             ]
             
             for pattern in date_patterns:
@@ -131,23 +143,75 @@ class InvoiceProcessor:
                         # Try to parse and format the date
                         dt = parser.parse(date_str, dayfirst=True, fuzzy=True)
                         invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
-                    except:
-                        invoice_data["invoice_date"] = date_str
-                    break
-            
-            # If not found with patterns, try generic date search in first 10 lines
-            if not invoice_data["invoice_date"]:
-                for line in lines[:10]:
-                    # Look for dates in common formats
-                    date_match = re.search(r'([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})', line)
-                    if date_match:
-                        date_str = date_match.group(1).strip()
+                        break
+                    except Exception as e:
+                        # If parsing fails, try to clean and parse again
                         try:
-                            dt = parser.parse(date_str, dayfirst=True, fuzzy=True)
+                            # Remove extra spaces and commas
+                            cleaned_date = re.sub(r'\s+', ' ', date_str.replace(',', '')).strip()
+                            dt = parser.parse(cleaned_date, dayfirst=True, fuzzy=True)
                             invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
                             break
                         except:
                             pass
+            
+            # If not found with explicit patterns, search more broadly
+            if not invoice_data["invoice_date"]:
+                # Search entire text for date-like patterns
+                # First try dates with separators
+                date_matches = re.findall(r'([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})', full_text)
+                for date_str in date_matches:
+                    try:
+                        dt = parser.parse(date_str, dayfirst=True, fuzzy=True)
+                        # Validate it's a reasonable date (not too far in future/past)
+                        if 1900 <= dt.year <= 2100:
+                            invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                            break
+                    except:
+                        pass
+                
+                # If still not found, try dates with month names
+                if not invoice_data["invoice_date"]:
+                    month_date_patterns = [
+                        r'([0-9]{1,2}\s+[A-Za-z]{3,9}\s+[0-9]{2,4})',  # "20 Dec 2012"
+                        r'([A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{2,4})',  # "Dec 20, 2012" or "Dec 20 2012"
+                    ]
+                    for pattern in month_date_patterns:
+                        matches = re.findall(pattern, full_text, re.IGNORECASE)
+                        for date_str in matches:
+                            try:
+                                dt = parser.parse(date_str, dayfirst=False, fuzzy=True)
+                                if 1900 <= dt.year <= 2100:
+                                    invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                                    break
+                            except:
+                                pass
+                        if invoice_data["invoice_date"]:
+                            break
+                
+                # Last resort: use dateutil's fuzzy parsing on lines that look date-like
+                if not invoice_data["invoice_date"]:
+                    for line in lines[:15]:  # Check first 15 lines
+                        # Look for lines that contain date-like content
+                        if re.search(r'\d{1,2}.*\d{2,4}', line):
+                            try:
+                                dt = parser.parse(line, fuzzy=True, dayfirst=True)
+                                if 1900 <= dt.year <= 2100:
+                                    invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                                    break
+                            except:
+                                pass
+                
+                # Final fallback: try fuzzy parsing on the entire text (first 500 chars)
+                if not invoice_data["invoice_date"]:
+                    try:
+                        # Use first 500 characters to avoid parsing too much
+                        text_sample = full_text[:500] if len(full_text) > 500 else full_text
+                        dt = parser.parse(text_sample, fuzzy=True, dayfirst=True)
+                        if 1900 <= dt.year <= 2100:
+                            invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                    except:
+                        pass
             
             # Extract GST number
             gst_patterns = [

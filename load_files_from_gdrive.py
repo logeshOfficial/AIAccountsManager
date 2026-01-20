@@ -126,6 +126,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 for entry in filtered_data:
                     entry["raw_text"] = entry.get("raw_text", "")  # optional
                     entry["vendor_name"] = entry.get("vendor_name", "")
+                    entry["invoice_date"] = entry.get("invoice_date", "")  # Ensure invoice_date is always set
                     st.info(entry)
                     insert_invoice(entry)
 
