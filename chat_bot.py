@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from dateutil import parser  # Robust date parsing
 
 import pandas as pd
 import streamlit as st
@@ -159,14 +160,14 @@ def filter_by_date_and_category(
         if not date_str:
             continue
 
-        # Try multiple formats as DB might have mixed formats
+        # Use dateutil parser for best-effort parsing of ANY valid format
         inv_date = None
-        for fmt in ["%b %d %Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"]:
-            try:
-                inv_date = datetime.strptime(date_str.strip(), fmt)
-                break
-            except ValueError:
-                continue
+        try:
+            inv_date = parser.parse(date_str.strip())
+        except Exception as e:
+            # Log specific parsing failures to help debug
+            # st.warning(f"Skipping invalid date format: '{date_str}' ({e})")
+            continue
         
         if not inv_date:
             continue
