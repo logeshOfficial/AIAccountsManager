@@ -17,16 +17,27 @@ def get_ai_client():
 
 def llm_call(prompt: str) -> str:
     client = get_ai_client()
-    OPENAI_MODEL = st.secrets["api_key"]
+    if not client:
+        return "{}"
 
-    response = client.responses.create(
-        model=OPENAI_MODEL,
-        input=[
-            {"role": "system", "content": "You are a precise financial invoice assistant."},
-            {"role": "user", "content": prompt}
-        ],
-    )
-    return response.output_text
+    # Use a standard HF model or one from secrets. 
+    # The user was setting model=api_key which is wrong.
+    # We'll use a strong default for invoice extraction.
+    OPENAI_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
+
+    try:
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a precise financial invoice assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"LLM Error: {e}")
+        return "{}"
 
 @st.cache_data(show_spinner=True)
 def load_invoices_from_db(user_email: str):
