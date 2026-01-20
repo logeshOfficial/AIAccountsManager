@@ -84,12 +84,30 @@ class DriveManager:
         return folder["id"]
 
     def list_files_in_folder(self, folder_id):
-        
-        results = self.drive_execute(self.service.files().list(q=f"'{folder_id}' in parents and trashed=false",
-            spaces='drive',
-            fields="files(id, name, mimeType)"))
-        
-        return results.get('files', [])
+        """
+        List *all* files in a folder (handles Drive API pagination).
+        Drive API commonly returns only the first ~100 items if you don't page.
+        """
+        all_files = []
+        page_token = None
+
+        while True:
+            results = self.drive_execute(
+                self.service.files().list(
+                    q=f"'{folder_id}' in parents and trashed=false",
+                    spaces="drive",
+                    pageSize=1000,
+                    pageToken=page_token,
+                    fields="nextPageToken, files(id, name, mimeType)",
+                )
+            )
+
+            all_files.extend(results.get("files", []))
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
+
+        return all_files
     
     def move_files_drive(self, files, dest_dir, drive_dirs):
         dest_folder_id = drive_dirs[dest_dir]

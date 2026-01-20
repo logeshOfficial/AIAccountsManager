@@ -63,9 +63,15 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             batch_data = []
             file_path_mapping = []
 
+            unsupported_files = []
             for item in batch_extracted:
+                # Track extraction failures so we don't silently miss files
+                if item.get("extract_error") and not item.get("lines"):
+                    unsupported_files.append({"id": item["id"], "name": item["name"]})
+                    continue
+
                 batch_data.append(item["lines"])
-                
+
                 file_path_mapping.append({
                     "id": item["id"],
                     "name": item["name"]
@@ -85,8 +91,8 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 
                 filtered_batch_data.append({
                     "text": text,
-                    "file": file_path_mapping[idx]   
-                })   
+                    "file": file_path_mapping[idx]
+                })
                 
             try:
                 # Use manual parser instead of LLM
@@ -145,6 +151,10 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             filtered_batch_data.clear()
             time.sleep(randint(3, 7))
             
+            # Include unsupported/unextractable files in invalid bucket (so nothing is missed silently)
+            for f in unsupported_files:
+                not_valid_file_paths.append(f)
+
             # Move processed files in Drive        
             drive_manager.move_files_drive(
                 valid_file_paths,

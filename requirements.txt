@@ -13,4 +13,6 @@ streamlit
 #google-generativeai
 #mistralai
 openai
+pillow
+pytesseract
 

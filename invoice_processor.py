@@ -5,7 +5,7 @@ import re
 from dateutil import parser
 import tempfile
 import fitz  # PyMuPDF
-# import easyocr
+from typing import Optional, Tuple
 from googleapiclient.http import MediaIoBaseDownload
 from collections import defaultdict
 import ai_models
@@ -403,46 +403,149 @@ class InvoiceProcessor:
 
 
     def extractor(self, service, files):
+        """
+        Best-effort text extraction for many file types.
+
+        Supported (best-effort):
+        - PDF: extract text via PyMuPDF
+        - CSV: read via pandas
+        - Excel: read via pandas (xlsx via openpyxl)
+        - Google Docs: export to text/plain
+        - Google Sheets: export to text/csv
+        - Plain text files: decode as utf-8 (fallback latin-1)
+        - Images (png/jpg/jpeg): OCR only if an OCR backend is available (optional)
+
+        Returns one entry per input file (so nothing is silently dropped).
+        """
+
+        def _download_bytes(file_id: str) -> bytes:
+            fh = io.BytesIO()
+            request = service.files().get_media(fileId=file_id)
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+            return fh.getvalue()
+
+        def _export_bytes(file_id: str, mime_type: str) -> bytes:
+            fh = io.BytesIO()
+            request = service.files().export_media(fileId=file_id, mimeType=mime_type)
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+            return fh.getvalue()
+
+        def _bytes_to_text(data: bytes) -> str:
+            try:
+                return data.decode("utf-8")
+            except Exception:
+                try:
+                    return data.decode("latin-1")
+                except Exception:
+                    return ""
+
+        def _ocr_image_bytes(image_bytes: bytes) -> Tuple[Optional[str], Optional[str]]:
+            """
+            Lightweight OCR: tries pytesseract (requires system tesseract + pillow).
+            If unavailable, returns a clear message so we don't silently skip files.
+            """
+            temp_path = None
+            try:
+                try:
+                    import pytesseract  # type: ignore
+                    from PIL import Image  # type: ignore
+                except Exception:
+                    return None, "OCR unavailable: install tesseract + pytesseract + pillow."
+
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    tmp.write(image_bytes)
+                    temp_path = tmp.name
+
+                img = Image.open(temp_path)
+                text = pytesseract.image_to_string(img)
+                return text, None
+            except Exception as e:
+                return None, f"OCR failed: {e}"
+            finally:
+                if temp_path:
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+
         results = []
         for f in files:
-            ext = os.path.splitext(f['name'])[1].lower()
+            name = f.get("name", "")
+            file_id = f.get("id", "")
+            mime = f.get("mimeType", "") or ""
+            ext = os.path.splitext(name)[1].lower()
+
             text = ""
+            error = ""
 
-            if ext == ".pdf":
-                fh = io.BytesIO()
-                request = service.files().get_media(fileId=f['id'])
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
+            try:
+                # Google native types
+                if mime == "application/vnd.google-apps.document":
+                    text = _bytes_to_text(_export_bytes(file_id, "text/plain"))
+                elif mime == "application/vnd.google-apps.spreadsheet":
+                    # Export as CSV (best-effort single-sheet export)
+                    text = _bytes_to_text(_export_bytes(file_id, "text/csv"))
 
-                doc = fitz.open(stream=fh.getvalue(), filetype="pdf")
-                for page in doc:
-                    text += page.get_text()
+                # PDFs
+                elif ext == ".pdf" or mime == "application/pdf":
+                    data = _download_bytes(file_id)
+                    doc = fitz.open(stream=data, filetype="pdf")
+                    text = "\n".join([page.get_text() for page in doc])
 
-            # elif ext in [".png", ".jpg", ".jpeg"]:
-            #     fh = io.BytesIO()
-            #     request = service.files().get_media(fileId=f['id'])
-            #     downloader = MediaIoBaseDownload(fh, request)
-            #     done = False
-            #     while not done:
-            #         _, done = downloader.next_chunk()
+                # CSV
+                elif ext == ".csv" or mime in ("text/csv", "application/csv"):
+                    import pandas as pd
+                    data = _download_bytes(file_id)
+                    df = pd.read_csv(io.BytesIO(data), dtype=str, keep_default_na=False, na_filter=False)
+                    text = df.to_csv(index=False)
 
-            #     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            #         tmp.write(fh.getvalue())
-            #         temp_path = tmp.name
+                # Excel
+                elif ext in (".xlsx", ".xls") or mime in (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.ms-excel",
+                ):
+                    import pandas as pd
+                    data = _download_bytes(file_id)
+                    xls = pd.ExcelFile(io.BytesIO(data))
+                    parts = []
+                    for sheet in xls.sheet_names:
+                        df = pd.read_excel(xls, sheet_name=sheet, dtype=str).fillna("")
+                        parts.append(f"--- Sheet: {sheet} ---")
+                        parts.append(df.to_csv(index=False))
+                    text = "\n".join(parts)
 
-            #     self.reader = self.get_easyocr_reader()
-            #     text = "\n".join(self.reader.readtext(temp_path, detail=0, paragraph=True))
-            #     os.remove(temp_path)
+                # Images (OCR optional)
+                elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
+                    data = _download_bytes(file_id)
+                    ocr_text, ocr_err = _ocr_image_bytes(data)
+                    if ocr_text:
+                        text = ocr_text
+                    else:
+                        error = ocr_err or "No OCR text extracted."
 
-            else:
-                continue
+                # Plain text-ish fallback
+                else:
+                    data = _download_bytes(file_id)
+                    text = _bytes_to_text(data)
+                    if not text.strip():
+                        error = f"Unsupported or non-text file type (mime={mime}, ext={ext})."
+
+            except Exception as e:
+                error = str(e)
 
             results.append({
-                "id": f["id"],
-                "name": f["name"],
-                "lines": [l.strip() for l in text.splitlines() if l.strip()]
+                "id": file_id,
+                "name": name,
+                "mimeType": mime,
+                "ext": ext,
+                "lines": [l.strip() for l in (text or "").splitlines() if l.strip()],
+                "extract_error": error,
             })
 
         return results
