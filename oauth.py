@@ -47,41 +47,31 @@ def ensure_google_login(show_ui: bool = True):
             scopes=_scopes(),
             redirect_uri=st.secrets["REDIRECT_URI"],
         )
-<<<<<<< HEAD
-=======
+
         flow.fetch_token(code=code)
         st.session_state["creds"] = flow.credentials
 
         # Fetch and store user email for tenant isolation
->>>>>>> 9febd5a7a54fd4bd1a6c01ed60b3b2fc2e07cb52
         try:
-            flow.fetch_token(code=code)
-            st.session_state["creds"] = flow.credentials
-
-            # Fetch and store user email for tenant isolation
-            try:
-                oauth2 = build("oauth2", "v2", credentials=flow.credentials)
-                info = oauth2.userinfo().get().execute()
-                st.session_state["user_email"] = (info or {}).get("email", "")
-            except Exception:
-                st.session_state["user_email"] = ""
-
-            st.query_params.clear()
-            st.rerun()
+            oauth2 = build("oauth2", "v2", credentials=flow.credentials)
+            info = oauth2.userinfo().get().execute()
+            st.session_state["user_email"] = (info or {}).get("email", "")
         except Exception:
-<<<<<<< HEAD
-            # InvalidGrant or similar (expired/used code or redirect mismatch)
-            st.warning("Google login failed (token exchange). Please try again.")
-            st.query_params.clear()
-
-=======
+            # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
             st.session_state["user_email"] = ""
 
+        # Clean URL
         st.query_params.clear()
         st.rerun()
 
->>>>>>> 9febd5a7a54fd4bd1a6c01ed60b3b2fc2e07cb52
-    if not show_ui:
+    # -----------------------------
+    # LOAD CREDENTIALS SAFELY
+    # -----------------------------
+    def load_credentials():
+        # 1️⃣ Session cache
+        if "creds" in st.session_state:
+            st.success("Welcome! You are logged in.")
+            return st.session_state["creds"]
         return None
 
     flow = Flow.from_client_config(
