@@ -82,7 +82,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
         except Exception as e:
             logger.warning(f"Primary model failed: {e}")
             primary_error = e
-            st.warning(f"Primary model encountered an error: {e}. Attempting fallback to Groq...")
+            # st.warning(f"Primary model encountered an error: {e}. Attempting fallback to Groq...")
 
     # --- Attempt 2: Groq Model ---
     groq_client = get_groq_client()
@@ -105,7 +105,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
         except Exception as e:
             logger.warning(f"Groq fallback model failed: {e}")
             groq_error = e
-            st.warning(f"Groq model encountered an error: {e}. Attempting fallback to Gemini...")
+            # st.warning(f"Groq model encountered an error: {e}. Attempting fallback to Gemini...")
 
     # --- Attempt 3: Fallback Model (Gemini) ---
     gemini_client = get_fallback_client()
@@ -121,7 +121,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
                 return response.text.strip(), model_name
         except Exception as e:
             logger.error(f"Gemini fallback model also failed: {e}")
-            st.error(f"Fallback model also failed: {e}")
+            # st.error(f"Fallback model also failed: {e}")
             
     # --- Failure ---
     if primary_error:

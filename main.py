@@ -17,10 +17,15 @@ st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home
 st.sidebar.button("Chat_Bot", on_click=lambda: st.query_params.update({"view": "chat"}))
 st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"view": "drive"}))
 
+user_email = st.session_state.get("user_email", "")
+admin_email = st.secrets.get("admin_email", "").strip().lower()
+is_admin = (user_email or "").strip().lower() == admin_email
+
 st.sidebar.markdown("---")
-if st.sidebar.checkbox("Show Logs", value=False):
-    import admin_utils
-    admin_utils.show_log_viewer()
+if is_admin:
+    if st.sidebar.checkbox("Show Logs", value=False):
+        import admin_utils
+        admin_utils.show_log_viewer()
 
 if view == "home":
     st.title("🏠 Home")
@@ -28,10 +33,6 @@ if view == "home":
     # Allow login directly from Home page
     if "creds" not in st.session_state:
         oauth.ensure_google_login(show_ui=True)
-
-    user_email = st.session_state.get("user_email", "")
-    admin_email = st.secrets.get("admin_email", "").strip().lower()
-    is_admin = (user_email or "").strip().lower() == admin_email
 
     if user_email:
         st.caption(f"Signed in as: {user_email}" + (" (admin)" if is_admin else ""))
