@@ -116,13 +116,23 @@ def llm_call(prompt: str) -> Tuple[str, str]:
             from google.genai import types
             
             # Use system instruction if available in new SDK
-            response = gemini_client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="You are a precise financial invoice assistant."
+            try:
+                response = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction="You are a precise financial invoice assistant."
+                    )
                 )
-            )
+            except Exception as flash_e:
+                logger.warning(f"Gemini {model_name} failed, trying gemini-1.5-pro: {flash_e}")
+                response = gemini_client.models.generate_content(
+                    model='gemini-1.5-pro',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction="You are a precise financial invoice assistant."
+                    )
+                )
             
             if response.text:
                 logger.info(f"LLM Call successful using Gemini fallback: {model_name}")

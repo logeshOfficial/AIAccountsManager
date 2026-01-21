@@ -35,7 +35,7 @@ def show_log_viewer():
             if search_msg:
                 df = df[df["message"].str.contains(search_msg, case=False, na=False)]
             
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
             
             st.markdown("---")
             if st.button("🗑️ Clear All Logs"):

@@ -10,7 +10,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from collections import defaultdict
 import ai_models
 from dotenv import load_dotenv
-# import google.generativeai as genai
+# Using new google-genai package
 import streamlit as st
 from app_logger import get_logger
 from llm_manager import llm_call
@@ -593,31 +593,43 @@ class InvoiceProcessor:
                             img = Image.open(io.BytesIO(data))
                             
                             prompt = "Extract all text from this invoice image. Return the complete text content."
-                            response = client.models.generate_content(
-                                model='gemini-1.5-flash',
-                                contents=[prompt, img]
-                            )
+                            
+                            # Try Flash first
+                            try:
+                                response = client.models.generate_content(
+                                    model='gemini-1.5-flash',
+                                    contents=[prompt, img]
+                                )
+                                if not response.text:
+                                    raise Exception("No text returned")
+                            except Exception as flash_e:
+                                logger.warning(f"Gemini Flash failed, trying Pro: {flash_e}")
+                                response = client.models.generate_content(
+                                    model='gemini-1.5-pro',
+                                    contents=[prompt, img]
+                                )
                             
                             if response.text:
                                 text = response.text
                                 vision_success = True
-                                logger.info(f"✓ Tier 1 (Gemini Vision) extracted text from: {name}")
+                                logger.info(f"✓ Tier 1 (Gemini) extracted text from: {name}")
                             else:
-                                raise Exception("Gemini Vision returned no text")
+                                raise Exception("Gemini returned no text")
                         else:
                             raise Exception("Gemini API key not configured")
                             
                     except Exception as gemini_error:
                         logger.warning(f"✗ Tier 1 (Gemini) failed for {name}: {gemini_error}")
                     
-                    # Tier 2: OpenAI Vision Mini (Reliable)
+                    # Tier 2: OpenAI Vision Mini (Reliable Fallback)
                     if not vision_success:
                         try:
                             import base64
                             from openai import OpenAI
                             
                             openai_key = st.secrets.get("openai_api_key")
-                            if openai_key:
+                            # CRITICAL: Validate it's an OpenAI key, not a Hugging Face key
+                            if openai_key and openai_key.startswith("sk-"):
                                 client = OpenAI(api_key=openai_key)
                                 base64_image = base64.b64encode(data).decode('utf-8')
                                 
@@ -641,28 +653,30 @@ class InvoiceProcessor:
                                 if response.choices[0].message.content:
                                     text = response.choices[0].message.content
                                     vision_success = True
-                                    logger.info(f"✓ Tier 2 (OpenAI Vision Mini) extracted text from: {name}")
+                                    logger.info(f"✓ Tier 2 (OpenAI Mini) extracted text from: {name}")
                                 else:
-                                    raise Exception("OpenAI Vision Mini returned no text")
+                                    raise Exception("OpenAI Mini returned no text")
                             else:
-                                raise Exception("OpenAI API key not configured")
+                                if openai_key:
+                                    logger.warning(f"Skipping OpenAI fallback: Provided key is not a valid OpenAI key (starts with {openai_key[:5]}...)")
+                                raise Exception("Valid OpenAI API key not configured")
                                 
                         except Exception as openai_mini_error:
                             logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {name}: {openai_mini_error}")
                     
-                    # Tier 3: OpenAI Vision Premium (Most Powerful)
+                    # Tier 3: OpenAI Vision Premium (Final Safety Net)
                     if not vision_success:
                         try:
                             import base64
                             from openai import OpenAI
                             
                             openai_key = st.secrets.get("openai_api_key")
-                            if openai_key:
+                            if openai_key and openai_key.startswith("sk-"):
                                 client = OpenAI(api_key=openai_key)
                                 base64_image = base64.b64encode(data).decode('utf-8')
                                 
                                 response = client.chat.completions.create(
-                                    model="gpt-4o",  # Premium model
+                                    model="gpt-4o",
                                     messages=[
                                         {
                                             "role": "user",
@@ -681,18 +695,19 @@ class InvoiceProcessor:
                                 if response.choices[0].message.content:
                                     text = response.choices[0].message.content
                                     vision_success = True
-                                    logger.info(f"✓ Tier 3 (OpenAI Vision Premium) extracted text from: {name}")
+                                    logger.info(f"✓ Tier 3 (OpenAI Premium) extracted text from: {name}")
                                 else:
-                                    raise Exception("OpenAI Vision Premium returned no text")
+                                    raise Exception("OpenAI Premium returned no text")
                             else:
-                                raise Exception("OpenAI API key not configured")
+                                # Don't log twice if Tier 2 already caught it
+                                raise Exception("Valid OpenAI API key not configured")
                                 
                         except Exception as openai_premium_error:
                             logger.error(f"✗ Tier 3 (OpenAI Premium) failed for {name}: {openai_premium_error}")
                     
                     # If all tiers failed
                     if not vision_success:
-                        error = "All 3 vision models failed (Gemini, GPT-4o-mini, GPT-4o)"
+                        error = "All vision fallback models failed or were misconfigured"
                         logger.error(f"Image processing completely failed for {name}")
 
                 # Plain text-ish fallback
