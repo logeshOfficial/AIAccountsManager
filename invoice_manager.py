@@ -8,7 +8,6 @@ from app_logger import get_logger
 
 logger = get_logger(__name__)
 
-@st.cache_data(show_spinner=True)
 def load_invoices_from_db(user_email: str) -> List[Dict[str, Any]]:
     """Loads invoices from the database and adapts them to the expected schema."""
     if not user_email:
