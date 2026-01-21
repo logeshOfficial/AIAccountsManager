@@ -27,6 +27,20 @@ if is_admin:
         import admin_utils
         admin_utils.show_log_viewer()
 
+st.sidebar.markdown("---")
+with st.sidebar.expander("❓ Help & Guide"):
+    st.markdown("""
+    **1. Login**: Sign in with Google to access your data.
+    
+    **2. Sync Data**: Go to **Drive_Manager** and click "Start Processing" to import invoices from Drive.
+    
+    **3. Analyze**: Go to **Chat_Bot** and ask questions like:
+    - *"Total spent in 2024?"*
+    - *"Show grocery invoices"*
+    
+    **4. Admin**: Admins can view logs below.
+    """)
+
 if view == "home":
     st.title("🏠 Home")
 

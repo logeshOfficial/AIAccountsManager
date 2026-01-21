@@ -78,7 +78,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     "name": item["name"]
                 })
 
-            KEYWORDS = ["total", "amount due", "grand total", "invoice total"]
+            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount"]
 
             for idx, text in enumerate(batch_data):  
                 has_total = any(
