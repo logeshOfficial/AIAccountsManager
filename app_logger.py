@@ -1,8 +1,12 @@
 import logging
 import sqlite3
 import datetime
+from datetime import timezone, timedelta
 import streamlit as st
 import os
+
+# IST is UTC+5:30
+IST = timezone(timedelta(hours=5, minutes=30))
 
 DB_LOG_PATH = "log.db"
 
@@ -48,7 +52,7 @@ class SQLiteHandler(logging.Handler):
             except Exception:
                 user_id = "System"
 
-            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
             
             conn = sqlite3.connect(DB_LOG_PATH, check_same_thread=False)
             cur = conn.cursor()
