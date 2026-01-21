@@ -577,14 +577,121 @@ class InvoiceProcessor:
                         parts.append(df.to_csv(index=False))
                     text = "\n".join(parts)
 
-                # Images (OCR optional)
+                # Images - Use Vision AI with 3-tier fallback
                 elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
                     data = _download_bytes(file_id)
-                    ocr_text, ocr_err = _ocr_image_bytes(data)
-                    if ocr_text:
-                        text = ocr_text
-                    else:
-                        error = ocr_err or "No OCR text extracted."
+                    vision_success = False
+                    
+                    # Tier 1: Gemini Vision (Fast & Cheap)
+                    try:
+                        import google.generativeai as genai
+                        from PIL import Image
+                        
+                        gemini_key = st.secrets.get("gemini_api_key")
+                        if gemini_key:
+                            genai.configure(api_key=gemini_key)
+                            img = Image.open(io.BytesIO(data))
+                            
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            prompt = "Extract all text from this invoice image. Return the complete text content."
+                            response = model.generate_content([prompt, img])
+                            
+                            if response.text:
+                                text = response.text
+                                vision_success = True
+                                logger.info(f"✓ Tier 1 (Gemini Vision) extracted text from: {name}")
+                            else:
+                                raise Exception("Gemini Vision returned no text")
+                        else:
+                            raise Exception("Gemini API key not configured")
+                            
+                    except Exception as gemini_error:
+                        logger.warning(f"✗ Tier 1 (Gemini) failed for {name}: {gemini_error}")
+                    
+                    # Tier 2: OpenAI Vision Mini (Reliable)
+                    if not vision_success:
+                        try:
+                            import base64
+                            from openai import OpenAI
+                            
+                            openai_key = st.secrets.get("openai_api_key")
+                            if openai_key:
+                                client = OpenAI(api_key=openai_key)
+                                base64_image = base64.b64encode(data).decode('utf-8')
+                                
+                                response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": "Extract all text from this invoice image. Return the complete text content."},
+                                                {
+                                                    "type": "image_url",
+                                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    max_tokens=1000
+                                )
+                                
+                                if response.choices[0].message.content:
+                                    text = response.choices[0].message.content
+                                    vision_success = True
+                                    logger.info(f"✓ Tier 2 (OpenAI Vision Mini) extracted text from: {name}")
+                                else:
+                                    raise Exception("OpenAI Vision Mini returned no text")
+                            else:
+                                raise Exception("OpenAI API key not configured")
+                                
+                        except Exception as openai_mini_error:
+                            logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {name}: {openai_mini_error}")
+                    
+                    # Tier 3: OpenAI Vision Premium (Most Powerful)
+                    if not vision_success:
+                        try:
+                            import base64
+                            from openai import OpenAI
+                            
+                            openai_key = st.secrets.get("openai_api_key")
+                            if openai_key:
+                                client = OpenAI(api_key=openai_key)
+                                base64_image = base64.b64encode(data).decode('utf-8')
+                                
+                                response = client.chat.completions.create(
+                                    model="gpt-4o",  # Premium model
+                                    messages=[
+                                        {
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": "Extract all text from this invoice image. Return the complete text content."},
+                                                {
+                                                    "type": "image_url",
+                                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    max_tokens=1500
+                                )
+                                
+                                if response.choices[0].message.content:
+                                    text = response.choices[0].message.content
+                                    vision_success = True
+                                    logger.info(f"✓ Tier 3 (OpenAI Vision Premium) extracted text from: {name}")
+                                else:
+                                    raise Exception("OpenAI Vision Premium returned no text")
+                            else:
+                                raise Exception("OpenAI API key not configured")
+                                
+                        except Exception as openai_premium_error:
+                            logger.error(f"✗ Tier 3 (OpenAI Premium) failed for {name}: {openai_premium_error}")
+                    
+                    # If all tiers failed
+                    if not vision_success:
+                        error = "All 3 vision models failed (Gemini, GPT-4o-mini, GPT-4o)"
+                        logger.error(f"Image processing completely failed for {name}")
 
                 # Plain text-ish fallback
                 else:
