@@ -1,5 +1,5 @@
 from openai import OpenAI
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 from app_logger import get_logger
 
@@ -15,8 +15,8 @@ def initiate_huggingface_model(api_key=None, base_url="https://router.huggingfac
 
 def initiate_gemini_model(api_key=None):
     try:
-        genai.configure(api_key=api_key)
-        return genai
+        client = genai.Client(api_key=api_key)
+        return client
     except Exception as e:
         logger.error(f"Error initiating Gemini model: {e}")
         raise Exception("Error initiating Gemini model: ", e)

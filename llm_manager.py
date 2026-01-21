@@ -113,9 +113,17 @@ def llm_call(prompt: str) -> Tuple[str, str]:
     if gemini_client:
         model_name = st.secrets.get("gemini_model", DEFAULT_FALLBACK_MODEL)
         try:
-            model = gemini_client.GenerativeModel(model_name)
-            full_prompt = f"System: You are a precise financial invoice assistant.\n\nUser: {prompt}"
-            response = model.generate_content(full_prompt)
+            from google.genai import types
+            
+            # Use system instruction if available in new SDK
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="You are a precise financial invoice assistant."
+                )
+            )
+            
             if response.text:
                 logger.info(f"LLM Call successful using Gemini fallback: {model_name}")
                 return response.text.strip(), model_name

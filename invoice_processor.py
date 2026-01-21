@@ -584,17 +584,19 @@ class InvoiceProcessor:
                     
                     # Tier 1: Gemini Vision (Fast & Cheap)
                     try:
-                        import google.generativeai as genai
+                        from google import genai
                         from PIL import Image
                         
                         gemini_key = st.secrets.get("gemini_api_key")
                         if gemini_key:
-                            genai.configure(api_key=gemini_key)
+                            client = genai.Client(api_key=gemini_key)
                             img = Image.open(io.BytesIO(data))
                             
-                            model = genai.GenerativeModel('gemini-pro-vision')
                             prompt = "Extract all text from this invoice image. Return the complete text content."
-                            response = model.generate_content([prompt, img])
+                            response = client.models.generate_content(
+                                model='gemini-1.5-flash',
+                                contents=[prompt, img]
+                            )
                             
                             if response.text:
                                 text = response.text
