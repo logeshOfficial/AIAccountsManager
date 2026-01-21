@@ -101,22 +101,28 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             try:
                 st.write(filtered_batch_data)
                 # Use LLM for robust extraction
-                chunk_texts = [item["text"] for item in filtered_batch_data]
-                
-                # Parse invoices using LLM with fallback to manual
-                if chunk_texts:
-                    parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
+                if filtered_batch_data:
+                     # If we matched keywords, prioritize those
+                    chunk_texts = [item["text"] for item in filtered_batch_data]
+                    source_mapping = filtered_batch_data
                 else:
-                    parsed_chunk = invoice_processor.parse_invoices_with_llm(batch_data)
+                    # Fallback: process everything if nothing matched (User request)
+                    # Use original batch_data and file_path_mapping
+                    chunk_texts = ["\n".join(lines) if isinstance(lines, list) else str(lines) for lines in batch_data]
+                    source_mapping = [{"file": f, "text": ""} for f in file_path_mapping] # dummy text wrapper to match structure
 
-                st.write(parsed_chunk)
+                parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
+                
                 # Add file information to each parsed entry
                 for k, entry in enumerate(parsed_chunk):
-                    if k < len(filtered_batch_data):
-                        entry["_file"] = filtered_batch_data[k]["file"]
+                    if k < len(source_mapping):
+                        if "file" in source_mapping[k]:
+                             entry["_file"] = source_mapping[k]["file"]
+                        else:
+                             # Should usually match file_path_mapping index k if we used batch_data
+                             entry["_file"] = file_path_mapping[k]
                     else:
-                        # Fallback if indices don't match
-                        entry["_file"] = filtered_batch_data[-1]["file"] if filtered_batch_data else {}
+                        entry["_file"] = {}
 
                 parsed_data.extend(parsed_chunk)
                             
