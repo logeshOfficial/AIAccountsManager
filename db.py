@@ -43,6 +43,9 @@ def init_db():
         cols = [r[1] for r in cur.execute("PRAGMA table_info(invoices)").fetchall()]
         if "user_id" not in cols:
             cur.execute("ALTER TABLE invoices ADD COLUMN user_id TEXT")
+            
+        if "extraction_method" not in cols:
+            cur.execute("ALTER TABLE invoices ADD COLUMN extraction_method TEXT")
 
         # Index for per-user queries
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)")
@@ -94,9 +97,10 @@ def insert_invoice(invoice, user_id: str):
             vendor_name,
             description,
             total_amount,
-            raw_text
+            raw_text,
+            extraction_method
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
             invoice["_file"]["id"],
@@ -106,8 +110,9 @@ def insert_invoice(invoice, user_id: str):
             invoice.get("gst_number"),
             invoice.get("vendor_name"),
             invoice.get("description"),
-            float(invoice.get("total_amount", 0)),
-            json.dumps(invoice.get("raw_text", ""))
+            invoice.get("total_amount", 0),
+            json.dumps(invoice.get("raw_text", "")),
+            invoice.get("extraction_method", "Unknown")
         ))
 
         conn.commit()

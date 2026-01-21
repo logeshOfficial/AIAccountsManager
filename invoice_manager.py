@@ -31,7 +31,8 @@ def load_invoices_from_db(user_email: str) -> List[Dict[str, Any]]:
                 "total_amount": r.get("total_amount", 0),
                 "vendor_name": r.get("vendor_name", ""),
                 "gst_number": r.get("gst_number", ""),
-                "raw_text": r.get("raw_text", "")
+                "raw_text": r.get("raw_text", ""),
+                "extraction_method": r.get("extraction_method", "N/A")
             })
         return adapted_records
         

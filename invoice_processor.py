@@ -97,7 +97,8 @@ class InvoiceProcessor:
                 "vendor_name": "",
                 "total_amount": "",
                 "description": "",
-                "raw_text": full_text
+                "raw_text": full_text,
+                "extraction_method": "Regex (Manual)"
             }
             
             # Extract invoice number
@@ -351,6 +352,7 @@ class InvoiceProcessor:
                 if match:
                     data = json.loads(match.group())
                     data["raw_text"] = full_text
+                    data["extraction_method"] = f"LLM ({model_name})"
                     parsed_invoices.append(data)
                 else:
                     # Fallback to manual if LLM fails to output JSON
