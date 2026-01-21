@@ -2,14 +2,25 @@ import streamlit as st
 import db
 import oauth
 import chat_bot
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 st.set_page_config(page_title="Invoices AI Manager", layout="wide")
+
+logger.info("Application started")
    
 view = st.query_params.get("view", "home")
+logger.info(f"Current view: {view}")
 
 st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home"}))
 st.sidebar.button("Chat_Bot", on_click=lambda: st.query_params.update({"view": "chat"}))
 st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"view": "drive"}))
+
+st.sidebar.markdown("---")
+if st.sidebar.checkbox("Show Logs", value=False):
+    import admin_utils
+    admin_utils.show_log_viewer()
 
 if view == "home":
     st.title("🏠 Home")

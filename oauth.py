@@ -3,6 +3,9 @@ from google_auth_oauthlib.flow import Flow
 import streamlit as st
 import load_files_from_gdrive
 from googleapiclient.discovery import build
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 def _client_config():
     return {
@@ -24,6 +27,7 @@ def _scopes():
     ]
 
 def logout():
+    logger.info("User logging out")
     st.session_state.clear()
     st.success("Logged out")
     st.rerun()

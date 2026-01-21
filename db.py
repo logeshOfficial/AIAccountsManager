@@ -3,6 +3,9 @@ import json
 import pandas as pd
 import os
 from typing import Tuple
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 DB_PATH = "/mount/src/invoices.db"
 
@@ -11,6 +14,7 @@ def get_connection():
     try:
         return sqlite3.connect(DB_PATH, check_same_thread=False)
     except Exception as e:
+        logger.error(f"Error while get_connection: {e}")
         raise Exception("Error while get_connection: ", e)
     
 def init_db():

@@ -11,6 +11,9 @@ import json
 from drive_manager import DriveManager
 from invoice_processor import InvoiceProcessor
 import db
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS):
     
@@ -183,6 +186,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
     finally:
         status.info("✅ Processing complete!")
+        logger.info(f"Processing completed in {time.time()-start_time:.2f}s")
         st.success(f"✅ Completed in {time.time()-start_time:.2f}s")
 
         end_time = time.time()

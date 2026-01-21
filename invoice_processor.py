@@ -12,6 +12,9 @@ import ai_models
 from dotenv import load_dotenv
 # import google.generativeai as genai
 import streamlit as st
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 load_dotenv()
 
