@@ -115,7 +115,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 filtered_data = []
                 
                 for idx, entry in enumerate(parsed_data):
-                    value = entry.get("total_amount", "")
+                    value = str(entry.get("total_amount", ""))
                     total = re.sub(r'[^\d.]', '', value.replace(",", "").replace("$", "").replace("₹", "").strip())
 
                     if invoice_processor.is_valid_invoice(total):
