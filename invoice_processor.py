@@ -334,7 +334,7 @@ class InvoiceProcessor:
             - "invoice_date": (string, format matching ["Jan 01 2024", "12-Sep-2025", 10 Aug 2000, 2nd Sep 1999, 02-10-2002, 10/12/1999] if possible, else raw)
             - "gst_number": (string, or empty)
             - "vendor_name": (string, name of the seller)
-            - "total_amount": (number or string, purely numeric ideally or format matching ["₹ 56.00", "$1234.56", "RM 789.00", "470.00 Rs."] or next/near to [Total Amount, Total Fare, Amount Due, Grand Total])
+            - "total_amount": (number or string, purely numeric ideally or format matching ["₹ 56.00", "$1234.56", "RM 789.00", "470.00 Rs."] or next/near to [Total Amount, Total Fare, Amount Due, Grand Total] or Total Fare : 470.00 Rs.)
             - "description": (string, summary of goods/services, category)
             
             If a field is missing, use an empty string. Do not invent data.
