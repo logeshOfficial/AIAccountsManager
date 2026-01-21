@@ -46,11 +46,14 @@ class InvoiceProcessor:
             return None, None
 
     def format_date(self, invoice_date):
+        """
+        Normalizes invoice date to standard format: DD-Mon-YYYY (e.g., 12-Sep-2025)
+        """
         if not invoice_date:
             return ""
         try:
-            dt = parser.parse(invoice_date, dayfirst=True)
-            return dt.strftime("%b %d %Y")
+            dt = parser.parse(str(invoice_date).strip(), dayfirst=True, fuzzy=True)
+            return dt.strftime("%d-%b-%Y")
         except:
             return invoice_date
 
@@ -143,16 +146,14 @@ class InvoiceProcessor:
                     date_str = match.group(1).strip()
                     try:
                         # Try to parse and format the date
-                        dt = parser.parse(date_str, dayfirst=True, fuzzy=True)
-                        invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                        invoice_data["invoice_date"] = self.format_date(date_str)
                         break
                     except Exception as e:
                         # If parsing fails, try to clean and parse again
                         try:
                             # Remove extra spaces and commas
                             cleaned_date = re.sub(r'\s+', ' ', date_str.replace(',', '')).strip()
-                            dt = parser.parse(cleaned_date, dayfirst=True, fuzzy=True)
-                            invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                            invoice_data["invoice_date"] = self.format_date(cleaned_date)
                             break
                         except:
                             pass
@@ -167,7 +168,7 @@ class InvoiceProcessor:
                         dt = parser.parse(date_str, dayfirst=True, fuzzy=True)
                         # Validate it's a reasonable date (not too far in future/past)
                         if 1900 <= dt.year <= 2100:
-                            invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                            invoice_data["invoice_date"] = self.format_date(date_str)
                             break
                     except:
                         pass
@@ -184,7 +185,7 @@ class InvoiceProcessor:
                             try:
                                 dt = parser.parse(date_str, dayfirst=False, fuzzy=True)
                                 if 1900 <= dt.year <= 2100:
-                                    invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                                    invoice_data["invoice_date"] = self.format_date(date_str)
                                     break
                             except:
                                 pass
@@ -199,7 +200,7 @@ class InvoiceProcessor:
                             try:
                                 dt = parser.parse(line, fuzzy=True, dayfirst=True)
                                 if 1900 <= dt.year <= 2100:
-                                    invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                                    invoice_data["invoice_date"] = self.format_date(line)
                                     break
                             except:
                                 pass
@@ -211,7 +212,7 @@ class InvoiceProcessor:
                         text_sample = full_text[:500] if len(full_text) > 500 else full_text
                         dt = parser.parse(text_sample, fuzzy=True, dayfirst=True)
                         if 1900 <= dt.year <= 2100:
-                            invoice_data["invoice_date"] = dt.strftime("%b %d %Y")
+                            invoice_data["invoice_date"] = self.format_date(text_sample)
                     except:
                         pass
             
@@ -351,6 +352,11 @@ class InvoiceProcessor:
                 match = re.search(r"\{[\s\S]+\}", response_text)
                 if match:
                     data = json.loads(match.group())
+                    
+                    # Normalize date to standard format
+                    if data.get("invoice_date"):
+                        data["invoice_date"] = self.format_date(data["invoice_date"])
+                    
                     data["raw_text"] = full_text
                     data["extraction_method"] = f"LLM ({model_name})"
                     parsed_invoices.append(data)
