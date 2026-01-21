@@ -65,7 +65,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             file_path_mapping = []
 
             unsupported_files = []
-            st.write(batch_extracted)
             for item in batch_extracted:
                 # Track extraction failures so we don't silently miss files
                 if item.get("extract_error") and not item.get("lines"):
@@ -80,8 +79,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 })
 
             KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare", "amount payable", "balance due"]
-
-            st.write(batch_data)
             
             for idx, text in enumerate(batch_data):  
                 has_total = any(
@@ -99,7 +96,6 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 })
                 
             try:
-                st.write(filtered_batch_data)
                 # Use LLM for robust extraction
                 if filtered_batch_data:
                      # If we matched keywords, prioritize those
