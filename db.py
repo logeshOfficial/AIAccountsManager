@@ -5,7 +5,6 @@ import os
 from typing import Tuple
 
 DB_PATH = "/mount/src/invoices.db"
-ADMIN_EMAIL = "iamlogeshwaran.info@gmail.com"
 
 
 def get_connection():

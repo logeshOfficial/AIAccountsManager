@@ -13,4 +13,5 @@ google-generativeai
 openai
 pillow
 pytesseract
+groq
 

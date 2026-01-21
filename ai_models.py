@@ -1,5 +1,6 @@
 from openai import OpenAI
 import google.generativeai as genai
+from groq import Groq
 
 def initiate_huggingface_model(api_key=None, base_url="https://router.huggingface.co/v1"):
     try: 
@@ -14,3 +15,10 @@ def initiate_gemini_model(api_key=None):
         return genai
     except Exception as e:
         raise Exception("Error initiating Gemini model: ", e)
+
+def initiate_groq_model(api_key=None):
+    try:
+        client = Groq(api_key=api_key)
+        return client
+    except Exception as e:
+        raise Exception("Error initiating Groq model: ", e)

@@ -16,6 +16,7 @@ import oauth
 # ==============================================================================
 
 DEFAULT_PRIMARY_MODEL = "meta-llama/Meta-Llama-3-8B-Instruct"
+DEFAULT_GROQ_MODEL = "llama3-8b-8192"
 DEFAULT_FALLBACK_MODEL = "gemini-1.5-flash"
 BASE_URL = "https://router.huggingface.co/v1"
 
@@ -33,6 +34,19 @@ def get_primary_client():
         return ai_models.initiate_huggingface_model(api_key=api_key, base_url=base_url)
     except Exception as e:
         st.error(f"Failed to initialize Primary Client: {e}")
+        return None
+
+@st.cache_resource
+def get_groq_client():
+    """Initializes the Groq AI client."""
+    api_key = st.secrets.get("groq_api_key")
+    
+    if not api_key:
+        return None
+        
+    try:
+        return ai_models.initiate_groq_model(api_key=api_key)
+    except Exception as e:
         return None
 
 @st.cache_resource
@@ -80,9 +94,29 @@ def llm_call(prompt: str) -> str:
             
         except Exception as e:
             primary_error = e
-            st.warning(f"Primary model encountered an error: {e}. Attempting fallback...")
+            st.warning(f"Primary model encountered an error: {e}. Attempting fallback to Groq...")
 
-    # --- Attempt 2: Fallback Model (Gemini) ---
+    # --- Attempt 2: Groq Model ---
+    groq_client = get_groq_client()
+    groq_error = None
+
+    if groq_client:
+        model_name = st.secrets.get("groq_model", DEFAULT_GROQ_MODEL)
+        try:
+            response = groq_client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a precise financial invoice assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            groq_error = e
+            st.warning(f"Groq model encountered an error: {e}. Attempting fallback to Gemini...")
+
+    # --- Attempt 3: Fallback Model (Gemini) ---
     gemini_client = get_fallback_client()
     
     if gemini_client:
@@ -100,6 +134,8 @@ def llm_call(prompt: str) -> str:
     # --- Failure ---
     if primary_error:
         st.error(f"Original error (Primary): {primary_error}")
+    if groq_error:
+        st.error(f"Secondary error (Groq): {groq_error}")
     
     return "{}"
 
@@ -115,7 +151,9 @@ def load_invoices_from_db(user_email: str) -> List[Dict[str, Any]]:
     
     try:
         # Check if user is admin (logic duplicated from main.py or db.py)
-        is_admin = (user_email or "").strip().lower() == db.ADMIN_EMAIL.lower()
+        # Check if user is admin (logic duplicated from main.py or db.py)
+        admin_email = st.secrets.get("admin_email", "").strip().lower()
+        is_admin = (user_email or "").strip().lower() == admin_email
         
         df = db.read_db(user_id=user_email, is_admin=is_admin)
         records = df.to_dict(orient="records")

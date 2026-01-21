@@ -19,7 +19,8 @@ if view == "home":
         oauth.ensure_google_login(show_ui=True)
 
     user_email = st.session_state.get("user_email", "")
-    is_admin = (user_email or "").strip().lower() == db.ADMIN_EMAIL.lower()
+    admin_email = st.secrets.get("admin_email", "").strip().lower()
+    is_admin = (user_email or "").strip().lower() == admin_email
 
     if user_email:
         st.caption(f"Signed in as: {user_email}" + (" (admin)" if is_admin else ""))
