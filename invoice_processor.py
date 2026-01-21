@@ -330,10 +330,10 @@ class InvoiceProcessor:
             You are an expert data extractor. Extract the following details from the invoice text below.
             Return ONLY a valid JSON object with these keys:
             - "invoice_number": (string, or empty)
-            - "invoice_date": (string, format matching ["Jan 01 2024", "12-Sep-2025", 10 Aug 2000, 2nd Sep 1999, 02-10-2002] if possible, else raw)
+            - "invoice_date": (string, format matching ["Jan 01 2024", "12-Sep-2025", 10 Aug 2000, 2nd Sep 1999, 02-10-2002, 10/12/1999] if possible, else raw)
             - "gst_number": (string, or empty)
             - "vendor_name": (string, name of the seller)
-            - "total_amount": (number or string, purely numeric ideally or format matching "₹ 56.00", "$1234.56", "RM 789.00" or next/near to Total Amount)
+            - "total_amount": (number or string, purely numeric ideally or format matching "₹ 56.00", "$1234.56", "RM 789.00" or next/near to [Total Amount, Total Fare])
             - "description": (string, summary of goods/services, category)
             
             If a field is missing, use an empty string. Do not invent data.
