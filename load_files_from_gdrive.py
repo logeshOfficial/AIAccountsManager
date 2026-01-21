@@ -106,6 +106,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 # Parse invoices using LLM with fallback to manual
                 parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
                 
+                st.write(parsed_chunk)
                 # Add file information to each parsed entry
                 for k, entry in enumerate(parsed_chunk):
                     if k < len(filtered_batch_data):
