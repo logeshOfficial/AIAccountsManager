@@ -79,7 +79,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     "name": item["name"]
                 })
 
-            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare", "amount payable", "balance due"]
+            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare :", "amount payable", "balance due"]
 
             st.write(batch_data)
             
