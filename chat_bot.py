@@ -113,7 +113,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
                 ],
                 max_tokens=500
             )
-            )
+            
             return response.choices[0].message.content.strip(), model_name
         except Exception as e:
             groq_error = e
