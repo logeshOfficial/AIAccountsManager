@@ -144,6 +144,34 @@ def read_db(user_id: str | None = None, is_admin: bool = False):
     finally:
         return df 
 
+def delete_user_data(user_id: str) -> Tuple[bool, str]:
+    """
+    Deletes all invoices associated with a specific user_id.
+    """
+    init_db()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        
+        # Check count before deleting
+        cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id = ?", (user_id,))
+        count = cur.fetchone()[0]
+        
+        if count == 0:
+            logger.info(f"User {user_id} attempted delete, but no records found.")
+            return True, "No records found to delete."
+            
+        cur.execute("DELETE FROM invoices WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"User {user_id} deleted their data ({count} records).")
+        return True, f"Successfully deleted {count} records."
+        
+    except Exception as e:
+        logger.error(f"Failed to delete data for user {user_id}: {e}")
+        return False, f"Error deleting data: {e}" 
+
 def drop_invoices_db(recreate: bool = True) -> Tuple[bool, str]:
     """
     Deletes the invoices sqlite database file at DB_PATH.
@@ -155,13 +183,17 @@ def drop_invoices_db(recreate: bool = True) -> Tuple[bool, str]:
         (success, message)
     """
     # Best-effort close of any open connections happens at call sites; here we just try to delete.
+    # Best-effort close of any open connections happens at call sites; here we just try to delete.
     try:
+        user_param = "Admin" # distinct from regular user delete
         if os.path.exists(DB_PATH):
             os.remove(DB_PATH)
+            logger.warning(f"Database dropped by {user_param}")
         else:
             # Treat "doesn't exist" as success for idempotency
             if recreate:
                 init_db()
+            logger.info(f"Drop DB requested, but DB not found. Schema recreated: {recreate}")
             return True, f"DB not found at {DB_PATH}. Recreated schema." if recreate else f"DB not found at {DB_PATH}."
 
         if recreate:

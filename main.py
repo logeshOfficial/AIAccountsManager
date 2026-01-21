@@ -54,17 +54,31 @@ if view == "home":
         st.warning("Could not fetch your Google email. Please logout and login again.")
 
     with st.expander("⚠️ Danger zone", expanded=False):
-        st.write("This will permanently delete the local invoices database and all stored invoices.")
-        confirm_drop = st.checkbox("I understand — delete invoices.db", value=False)
-        recreate = st.checkbox("Recreate empty DB after delete", value=True)
-
-        if st.button("🗑️ Drop invoices DB", disabled=not confirm_drop, type="primary"):
-            ok, msg = db.drop_invoices_db(recreate=recreate)
+        # 1. User Action: Delete OWN data
+        st.write("**My Data**")
+        if st.button("🗑️ Delete ALL my uploaded invoices"):
+            ok, msg = db.delete_user_data(user_email)
             if ok:
                 st.success(msg)
                 st.rerun()
             else:
                 st.error(msg)
+                
+        # 2. Admin Action: Delete EVERYTHING
+        if is_admin:
+            st.markdown("---")
+            st.write("**Admin: Global Reset**")
+            st.write("This will permanently delete the ENTIRE invoices database for ALL users.")
+            confirm_drop = st.checkbox("I understand — delete invoices.db", value=False)
+            recreate = st.checkbox("Recreate empty DB after delete", value=True)
+
+            if st.button("💣 Drop invoices DB", disabled=not confirm_drop, type="primary"):
+                ok, msg = db.drop_invoices_db(recreate=recreate)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
 
     # Security: normal users only see their own rows; admin sees everything.
     df = db.read_db(user_id=user_email, is_admin=is_admin)

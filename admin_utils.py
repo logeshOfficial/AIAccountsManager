@@ -1,30 +1,56 @@
 import streamlit as st
+import sqlite3
+import pandas as pd
 import os
+
+DB_LOG_PATH = "log.db"
 
 def show_log_viewer():
     """
-    Displays the contents of app.log in a scrollable text area.
-    Useful for debugging in Streamlit Cloud.
+    Displays the contents of log.db in a structured dataframe.
     """
-    st.markdown("### 📜 Application Logs")
+    st.markdown("### 📜 Application Logs (SQLite)")
     
-    log_file = "app.log"
-    
-    if os.path.exists(log_file):
-        with open(log_file, "r", encoding="utf-8") as f:
-            # Read last 500 lines to avoid massive load
-            lines = f.readlines()
-            logs = "".join(lines[-500:])
-            
-        st.text_area("Last 500 Log Entries", logs, height=400)
+    if not os.path.exists(DB_LOG_PATH):
+        st.warning("No log database found yet.")
+        return
+
+    try:
+        conn = sqlite3.connect(DB_LOG_PATH, check_same_thread=False)
         
-        if st.button("Refresh Logs"):
-            st.rerun()
+        # Query logs
+        df = pd.read_sql_query("SELECT id, timestamp, user_id, level, name, message FROM logs ORDER BY id DESC LIMIT 500", conn)
+        conn.close()
+        
+        if not df.empty:
+            # Filters
+            col1, col2 = st.columns(2)
+            with col1:
+                search_user = st.text_input("Filter by User Email")
+            with col2:
+                search_msg = st.text_input("Filter by Message")
+                
+            if search_user:
+                df = df[df["user_id"].str.contains(search_user, case=False, na=False)]
+            if search_msg:
+                df = df[df["message"].str.contains(search_msg, case=False, na=False)]
             
-        if st.button("Clear Logs", type="secondary"):
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write("")
-            st.success("Logs cleared.")
-            st.rerun()
-    else:
-        st.warning("No log file found.")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            if st.button("🗑️ Clear All Logs"):
+                try:
+                    conn = sqlite3.connect(DB_LOG_PATH, check_same_thread=False)
+                    cur = conn.cursor()
+                    cur.execute("DELETE FROM logs")
+                    conn.commit()
+                    conn.close()
+                    st.success("Logs cleared successfully.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to clear logs: {e}")
+        else:
+            st.info("Log database is empty.")
+            
+    except Exception as e:
+        st.error(f"Error reading log database: {e}")
