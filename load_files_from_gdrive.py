@@ -143,6 +143,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
                 st.info(f"Parsed invoices count: {len(parsed_data)}")
                 st.info(f"Valid invoices count: {len(filtered_data)}")
+                st.info(f"Invalid invoices count: {len(unsupported_files)}")
                 logger.info(f"Validation complete: {len(filtered_data)} valid invoices out of {len(parsed_data)} parsed")
 
                 from db import insert_invoice
