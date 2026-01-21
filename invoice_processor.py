@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 # import google.generativeai as genai
 import streamlit as st
 from app_logger import get_logger
+from llm_manager import llm_call
 
 logger = get_logger(__name__)
 
@@ -313,6 +314,54 @@ class InvoiceProcessor:
             
             parsed_invoices.append(invoice_data)
         
+        return parsed_invoices
+
+    def parse_invoices_with_llm(self, invoice_texts):
+        """
+        Uses LLM to extract structured data from invoice texts.
+        This is more robust than regex for varied layouts.
+        """
+        parsed_invoices = []
+        
+        for invoice_text in invoice_texts:
+            full_text = invoice_text if isinstance(invoice_text, str) else "\n".join(invoice_text)
+            
+            prompt = f"""
+            You are an expert data extractor. Extract the following details from the invoice text below.
+            Return ONLY a valid JSON object with these keys:
+            - "invoice_number": (string, or empty)
+            - "invoice_date": (string, format matching "Jan 01 2024" if possible, else raw)
+            - "gst_number": (string, or empty)
+            - "vendor_name": (string, name of the seller)
+            - "total_amount": (number or string, purely numeric ideally)
+            - "description": (string, summary of goods/services, category)
+            
+            If a field is missing, use an empty string. Do not invent data.
+            
+            Invoice Text:
+            {full_text[:3500]} 
+            """
+            # Truncated to 3500 chars to fit context window if needed, though most models handle 8k+.
+            
+            try:
+                response_text, model_name = llm_call(prompt)
+                
+                # Extract JSON from response
+                match = re.search(r"\{[\s\S]+\}", response_text)
+                if match:
+                    data = json.loads(match.group())
+                    data["raw_text"] = full_text
+                    parsed_invoices.append(data)
+                else:
+                    # Fallback to manual if LLM fails to output JSON
+                    logger.warning(f"LLM did not return JSON. Falling back to manual parse for this doc.")
+                    parsed_invoices.extend(self.parse_invoices_manual([full_text]))
+
+            except Exception as e:
+                logger.error(f"LLM Parsing failed: {e}")
+                # Fallback
+                parsed_invoices.extend(self.parse_invoices_manual([full_text]))
+                
         return parsed_invoices
         
     def create_and_upload_excel(self,

@@ -96,11 +96,11 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 })
                 
             try:
-                # Use manual parser instead of LLM
+                # Use LLM for robust extraction
                 chunk_texts = [item["text"] for item in filtered_batch_data]
                 
-                # Parse invoices manually using regex and pattern matching
-                parsed_chunk = invoice_processor.parse_invoices_manual(chunk_texts)
+                # Parse invoices using LLM with fallback to manual
+                parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
                 
                 # Add file information to each parsed entry
                 for k, entry in enumerate(parsed_chunk):
