@@ -79,7 +79,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     "name": item["name"]
                 })
 
-            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare :", "amount payable", "balance due"]
+            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare", "amount payable", "balance due"]
 
             st.write(batch_data)
             
@@ -104,8 +104,11 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 chunk_texts = [item["text"] for item in filtered_batch_data]
                 
                 # Parse invoices using LLM with fallback to manual
-                parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
-                
+                if chunk_texts:
+                    parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
+                else:
+                    parsed_chunk = invoice_processor.parse_invoices_with_llm(batch_data)
+
                 st.write(parsed_chunk)
                 # Add file information to each parsed entry
                 for k, entry in enumerate(parsed_chunk):
