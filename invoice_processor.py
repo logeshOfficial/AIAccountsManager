@@ -592,7 +592,7 @@ class InvoiceProcessor:
                             genai.configure(api_key=gemini_key)
                             img = Image.open(io.BytesIO(data))
                             
-                            model = genai.GenerativeModel('models/gemini-1.5-flash')
+                            model = genai.GenerativeModel('gemini-pro-vision')
                             prompt = "Extract all text from this invoice image. Return the complete text content."
                             response = model.generate_content([prompt, img])
                             
