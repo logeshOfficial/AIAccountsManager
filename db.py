@@ -68,7 +68,7 @@ def check_invoice_exists(file_id: str) -> bool:
         exists = cur.fetchone() is not None
         return exists
     except Exception as e:
-        print(f"Error checking invoice existence: {e}")
+        logger.error(f"Error checking invoice existence: {e}")
         return False
     finally:
         if 'conn' in locals():
@@ -79,7 +79,7 @@ def insert_invoice(invoice, user_id: str):
     
     # 1. Check for duplicates
     if check_invoice_exists(invoice["_file"]["id"]):
-        print(f"Skipping duplicate invoice: {invoice['_file']['name']} (ID: {invoice['_file']['id']})")
+        logger.info(f"Skipping duplicate invoice: {invoice['_file']['name']} (ID: {invoice['_file']['id']})")
         return
 
     try:

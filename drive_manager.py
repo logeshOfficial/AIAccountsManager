@@ -7,6 +7,9 @@ import time
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import streamlit as st
+from app_logger import get_logger
+
+logger = get_logger(__name__)
 
 class DriveManager:
     def __init__(self, creds):
@@ -44,7 +47,7 @@ class DriveManager:
             except HttpError as e:
                 if e.resp.status in [403, 429, 500, 503]:
                     wait = (2 ** i) + random.random()
-                    print(f"⏳ Drive retry in {wait:.2f}s")
+                    logger.warning(f"⏳ Drive retry in {wait:.2f}s")
                     time.sleep(wait)
                 else:
                     raise
@@ -130,10 +133,10 @@ class DriveManager:
                     )
                 )
 
-                print(f"📁 Drive moved: {new_name}")
+                logger.info(f"📁 Drive moved: {new_name}")
                 
             except Exception as e:
-                print(f"❌ Failed to move {f['name']}: {e}")
+                logger.error(f"❌ Failed to move {f['name']}: {e}")
 
     def download_drive_file(self, file_id, local_path):
         request = self.service.files().get_media(fileId=file_id)

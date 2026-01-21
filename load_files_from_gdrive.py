@@ -59,7 +59,9 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             )
             
             st.info(f"Batch_len: {len(filepaths[i:i+batch_size])}")
+            logger.info(f"Starting batch {i//batch_size + 1}: Processing {len(batch)} files")
             batch_extracted  = invoice_processor.extractor(drive_manager.service, filepaths[i:i+batch_size])
+            logger.info(f"Extraction complete: {len(batch_extracted)} files extracted")
             
             batch_data = []
             file_path_mapping = []
@@ -69,6 +71,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                 # Track extraction failures so we don't silently miss files
                 if item.get("extract_error") and not item.get("lines"):
                     unsupported_files.append({"id": item["id"], "name": item["name"]})
+                    logger.warning(f"Extraction failed for {item['name']}: {item.get('extract_error')}")
                     continue
 
                 batch_data.append(item["lines"])
@@ -94,6 +97,8 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     "text": text,
                     "file": file_path_mapping[idx]
                 })
+            
+            logger.info(f"Keyword filtering: {len(filtered_batch_data)} of {len(batch_data)} files matched keywords")
                 
             try:
                 # Use LLM for robust extraction
@@ -108,6 +113,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     source_mapping = [{"file": f, "text": ""} for f in file_path_mapping] # dummy text wrapper to match structure
 
                 parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
+                logger.info(f"LLM parsing complete: {len(parsed_chunk)} invoices parsed from {len(chunk_texts)} documents")
                 
                 # Add file information to each parsed entry
                 for k, entry in enumerate(parsed_chunk):
@@ -137,6 +143,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
                 st.info(f"Parsed invoices count: {len(parsed_data)}")
                 st.info(f"Valid invoices count: {len(filtered_data)}")
+                logger.info(f"Validation complete: {len(filtered_data)} valid invoices out of {len(parsed_data)} parsed")
 
                 from db import insert_invoice
 
@@ -150,10 +157,13 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
                     entry["invoice_date"] = entry.get("invoice_date", "")  # Ensure invoice_date is always set
                     # entry["extraction_method"] is already present from processor
                     insert_invoice(entry, user_id=user_id)
+                
+                logger.info(f"Database insertion complete: {len(filtered_data)} invoices inserted for user {user_id}")
 
                 # batch_wise_filtered_data.append(filtered_data)
                 
             except Exception as e:
+                logger.error(f"Batch processing error: {e}", exc_info=True)
                 st.error(f"❌ Failed to parse or extract batch: {e}")
                 with open("failed_batch.json", "w", encoding="utf-8") as f:
                     f.write(json.dumps(filtered_batch_data, indent=2))
@@ -166,7 +176,8 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             for f in unsupported_files:
                 not_valid_file_paths.append(f)
 
-            # Move processed files in Drive        
+            # Move processed files in Drive
+            logger.info(f"Moving files: {len(valid_file_paths)} valid, {len(not_valid_file_paths)} invalid")        
             drive_manager.move_files_drive(
                 valid_file_paths,
                 dest_dir="valid_docs",
@@ -193,7 +204,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
             st.dataframe(db.read_db(user_id=st.session_state.get("user_email", ""), is_admin=False))
             
     except Exception as e:
-        print("❌Error:", str(e))
+        logger.error(f"❌ Main processing error: {e}")
 
     finally:
         status.info("✅ Processing complete!")
@@ -202,7 +213,7 @@ def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRI
 
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Loop execution time: {elapsed_time:.2f}s")
+        logger.info(f"Loop execution time: {elapsed_time:.2f}s")
 
 
 def initiate_drive(creds):
