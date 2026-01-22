@@ -33,23 +33,31 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
             
             # List of models to try in order of efficiency/reliability
             gemini_models = [
-                'gemini-1.5-flash', 'gemini-1.5-flash-latest', 
-                'gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'
+                'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest',
+                'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'
             ]
             
             for model_id in gemini_models:
-                try:
-                    response = client.models.generate_content(
-                        model=model_id,
-                        contents=[prompt, img]
-                    )
-                    if response.text:
-                        logger.info(f"✓ Tier 1 (Gemini {model_id}) extracted text from: {file_name}")
-                        return response.text
-                except Exception as model_e:
-                    if "404" in str(model_e):
-                        continue # Try next model
-                    logger.warning(f"Tier 1 ({model_id}) failed: {model_e}")
+                for attempt in range(2): # Retry once on transient failures
+                    try:
+                        response = client.models.generate_content(
+                            model=model_id,
+                            contents=[prompt, img]
+                        )
+                        if response.text:
+                            logger.info(f"✓ Tier 1 (Gemini {model_id}) extracted text.")
+                            return response.text
+                    except Exception as model_e:
+                        err_str = str(model_e).lower()
+                        if "404" in err_str:
+                            break # This model isn't available, try next model ID
+                        if "429" in err_str or "exhausted" in err_str:
+                            logger.warning(f"⏳ Tier 1 ({model_id}) quota exhausted. Waiting 5s...")
+                            import time
+                            time.sleep(5)
+                            continue # Retry current model once
+                        logger.warning(f"Tier 1 ({model_id}) failed: {model_e}")
+                        break # Try next model ID
     except Exception as e:
         logger.warning(f"✗ Tier 1 (Gemini) major failure for {file_name}: {e}")
 

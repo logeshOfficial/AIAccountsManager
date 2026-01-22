@@ -12,6 +12,7 @@ import data_normalization_utils as utils
 import pdf_engine
 import vision_engine
 import config
+import time
 
 logger = get_logger(__name__)
 
@@ -41,6 +42,12 @@ class InvoiceProcessor:
         for i, invoice_text in enumerate(invoice_texts):
             full_text = invoice_text if isinstance(invoice_text, str) else "\n".join(invoice_text)
             
+            # --- Tier 0: Check for empty text (Vision failure) ---
+            if not full_text.strip():
+                logger.warning(f"⏩ Doc {i+1}: Skipping LLM parsing because text content is empty.")
+                parsed_invoices.append({"invoice_date": "Unknown", "total_amount": 0.0, "vendor_name": "Unknown", "raw_text": "", "extraction_method": "Skipped (No Text)"})
+                continue
+
             # --- Stage 1: Primary Extraction ---
             prompt = f"{config.prompt}\n\nInvoice Text Content:\n{full_text[:4000]}"
             
@@ -127,8 +134,10 @@ class InvoiceProcessor:
                     df = pd.read_csv(io.BytesIO(data), dtype=str) if ext == ".csv" else pd.read_excel(io.BytesIO(data), dtype=str)
                     text = df.fillna("").to_csv(index=False)
                 elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
+                    # Add mandatory cooldown for images to avoid Free Tier Rate Limits (429)
+                    if f > 0: time.sleep(3) 
                     text = vision_engine.extract_text_with_vision(_get_bytes(file_id), name)
-                    if not text: error = "Vision extraction failed"
+                    if not text: error = "Vision extraction failed (Limit reached or API error)"
                 else:
                     text = _get_bytes(file_id).decode("utf-8", errors="ignore")
             except Exception as e:

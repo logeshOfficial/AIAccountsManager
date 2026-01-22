@@ -9,7 +9,11 @@ logger = get_logger(__name__)
 
 def validate_environment():
     """Ensures all required secrets are present before starting the app."""
-    required_keys = ["supabase_url", "supabase_key", "openai_api_key", "gemini_api_key", "admin_email"]
+    required_keys = [
+        "supabase_url", "supabase_key", 
+        "openai_api_key", "gemini_api_key", "admin_email",
+        "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "REDIRECT_URI", "INPUT_DOCS"
+    ]
     missing = [k for k in required_keys if not st.secrets.get(k)]
     
     if missing:
