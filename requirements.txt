@@ -18,3 +18,4 @@ groq
 supabase
 transformers
 torch
+sentencepiece
