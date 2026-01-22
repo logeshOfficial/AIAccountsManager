@@ -50,11 +50,17 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
         entry["_file"] = file_info
         
         amount = utils.clean_amount(entry.get("total_amount"))
-        if amount > 0:
+        vendor = str(entry.get("vendor_name", "")).strip()
+        date = str(entry.get("invoice_date", "")).strip()
+        
+        # PERSISTENCE RULE: Save if we have an amount OR if we have both vendor and date.
+        # This prevents skipping valid documents just because the amount was slightly ambiguous.
+        if amount > 0 or (vendor and date):
             entry["total_amount"] = amount
             db.insert_invoice(entry, user_id=user_id)
             valid_files.append(file_info)
         else:
+            logger.warning(f"Skipping file {file_info['name']}: Insufficient data (Amount: {amount}, Vendor: {vendor}, Date: {date})")
             invalid_files.append(file_info)
 
     # 5. Move Files in Drive
@@ -94,19 +100,29 @@ def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, i
     st.success("✅ Processing complete!")
     st.toast("Invoices processed successfully!", icon="✅")
 
+def setup_drive_folders(drive: DriveManager):
+    """Ensures necessary Drive folders exist and returns their IDs."""
+    input_folder_id = drive.get_or_create_folder(st.secrets["INPUT_DOCS"])
+    root_id = drive.get_or_create_folder("Invoice_Processing")
+    
+    DRIVE_DIRS = {
+        "project_id": root_id,
+        "input_folder_id": input_folder_id,
+        "valid_docs": drive.get_or_create_folder("scanned_docs", root_id),
+        "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
+    }
+    return DRIVE_DIRS
+
 def initiate_drive(creds):
     processor = InvoiceProcessor()
     drive = DriveManager(creds)
     
-    if st.button("Start Invoice Processing"):
-        input_folder_id = drive.get_or_create_folder(st.secrets["INPUT_DOCS"])
-        root_id = drive.get_or_create_folder("Invoice_Processing")
-        
-        DRIVE_DIRS = {
-            "project_id": root_id,
-            "valid_docs": drive.get_or_create_folder("scanned_docs", root_id),
-            "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
-        }
-        
-        start_processing(drive, processor, input_folder_id, DRIVE_DIRS)
+    # Auto-initialize folders on login
+    DRIVE_DIRS = setup_drive_folders(drive)
+    st.session_state["drive_dirs"] = DRIVE_DIRS
+    
+    st.success(f"📂 Drive Connected! Monitoring folder: '{st.secrets['INPUT_DOCS']}'")
+    
+    if st.button("🚀 Start Invoice Processing"):
+        start_processing(drive, processor, DRIVE_DIRS["input_folder_id"], DRIVE_DIRS)
         st.session_state["drive_ready"] = True
