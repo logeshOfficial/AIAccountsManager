@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import auth_utils
 import oauth
 import llm_manager
 import invoice_manager
@@ -14,17 +15,15 @@ logger = get_logger(__name__)
 
 def ensure_user_login():
     """Checks login status and halts execution if not logged in."""
-    if "creds" not in st.session_state:
+    user_email = auth_utils.get_logged_in_user()
+    if not user_email:
         st.warning("Please log in to use the Chat Bot.")
         oauth.ensure_google_login(show_ui=True)
-        if "creds" not in st.session_state:
+        # Re-check after potential login interaction
+        user_email = auth_utils.get_logged_in_user()
+        if not user_email:
             st.stop()
             
-    user_email = st.session_state.get("user_email")
-    if not user_email:
-        st.error("Authentication Error: User email missing.")
-        st.stop()
-        
     return user_email
 
 def run_chat_interface():

@@ -5,7 +5,8 @@ from googleapiclient.errors import HttpError
 import random
 import time
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+import pandas as pd
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 import streamlit as st
 from app_logger import get_logger
 
@@ -165,3 +166,39 @@ class DriveManager:
             raise ValueError(f"❌ Folder not found in Drive: {folder_name}")
 
         return files[0]["id"]
+
+    def create_and_upload_excel(self, output_folder_id, year, months_data):
+        """Creates an Excel report for the year and uploads/updates it on Drive."""
+        import tempfile, shutil
+        filename = f"invoices_{year}.xlsx"
+        tmp_dir = tempfile.mkdtemp()
+        local_path = os.path.join(tmp_dir, filename)
+
+        try:
+            with pd.ExcelWriter(local_path, engine="openpyxl", mode="w") as writer:
+                sheets_written = False
+                for month, invoices in months_data.items():
+                    if invoices:
+                        pd.DataFrame(invoices).to_excel(writer, sheet_name=month, index=False)
+                        sheets_written = True
+                if not sheets_written: return
+
+            time.sleep(1)
+            media = MediaFileUpload(local_path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resumable=True)
+            
+            # Check for existing
+            existing = self.drive_execute(self.service.files().list(
+                q=f"name='{filename}' and '{output_folder_id}' in parents and trashed=false",
+                fields="files(id)"
+            )).get("files", [])
+
+            if existing:
+                self.drive_execute(self.service.files().update(fileId=existing[0]["id"], media_body=media))
+            else:
+                self.drive_execute(self.service.files().create(
+                    body={"name": filename, "parents": [output_folder_id], "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                    media_body=media
+                ))
+            logger.info(f"✅ Excel report uploaded: {filename}")
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)

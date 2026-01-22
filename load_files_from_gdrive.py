@@ -1,260 +1,113 @@
-
 import gc
 import re
-import tempfile
 import time
-import pandas as pd
+import json
 import streamlit as st
 from random import randint
-import os
-import json
+from typing import List, Dict
+import db
+import data_normalization_utils as utils
 from drive_manager import DriveManager
 from invoice_processor import InvoiceProcessor
-import db
+from concurrent.futures import ThreadPoolExecutor
 from app_logger import get_logger
 
 logger = get_logger(__name__)
 
-def start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS):
+def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor, user_id: str, DRIVE_DIRS: Dict):
+    """Processes a single batch of files: extraction, filtering, parsing, and storage."""
+    # 1. Extraction
+    batch_extracted = processor.extractor(drive_manager.service, batch)
     
-    st.success("🟢 System ready")
-    st.info("📄 Processing invoices from Google Drive. Kindly please wait until the progress complete \n Note: *** Don't refresh the page.***")
+    # 2. Keyword Filtering
+    KEYWORDS = ["total", "amount due", "grand total", "total amount", "total fare", "balance due"]
+    filtered_for_llm = []
+    skipped_files = []
 
-
-    all_files = drive_manager.list_files_in_folder(
-        input_docs_folder_id
-    )
-
-    # ================= Main Processing Loop =================
-    start_time = time.time()
-
-    batch_size = 20
-    filepaths = []
-    batch_data =[]
-    batch_wise_filtered_data = []
-    filtered_batch_data = [] 
-
-    # ================= Process Selected Folder =================
-    filepaths = [f for f in all_files]
-
-    progress = st.progress(0)
-    status = st.empty()
-
-    total_files = len(filepaths)
-    processed_files = 0
-
-    if not filepaths:
-        st.warning("No files found in the selected folder.")
-    else:
-        st.info(f"{len(filepaths)} files found. Processing...")
-
-    try:
-        for i in range(0, len(filepaths), batch_size):
-            valid_file_paths = []
-            not_valid_file_paths = []
-            parsed_data = []
-            batch = filepaths[i:i+batch_size]
-            status.info(
-                f"Processing files {i + 1} → {min(i + batch_size, total_files)} of {total_files}"
-            )
+    for item in batch_extracted:
+        if item.get("extract_error") and not item.get("lines"):
+            skipped_files.append({"id": item["id"], "name": item["name"]})
+            continue
             
-            st.info(f"Batch_len: {len(filepaths[i:i+batch_size])}")
-            logger.info(f"Starting batch {i//batch_size + 1}: Processing {len(batch)} files")
-            batch_extracted  = invoice_processor.extractor(drive_manager.service, filepaths[i:i+batch_size])
-            logger.info(f"Extraction complete: {len(batch_extracted)} files extracted")
-            
-            batch_data = []
-            file_path_mapping = []
+        text_lines = item["lines"]
+        if any(any(k in line.lower() for k in KEYWORDS) for line in text_lines):
+            filtered_for_llm.append({"text": "\n".join(text_lines), "file": {"id": item["id"], "name": item["name"]}})
+        else:
+            # If no keywords, we still try parsing (or skip based on strictness)
+            filtered_for_llm.append({"text": "\n".join(text_lines), "file": {"id": item["id"], "name": item["name"]}})
 
-            unsupported_files = []
-            for item in batch_extracted:
-                # Track extraction failures so we don't silently miss files
-                if item.get("extract_error") and not item.get("lines"):
-                    unsupported_files.append({"id": item["id"], "name": item["name"]})
-                    logger.warning(f"Extraction failed for {item['name']}: {item.get('extract_error')}")
-                    continue
+    # 3. LLM Parsing
+    if not filtered_for_llm: return
+    
+    chunk_texts = [f["text"] for f in filtered_for_llm]
+    parsed_chunk = processor.parse_invoices_with_llm(chunk_texts)
+    
+    # 4. Validation & Storage
+    valid_files = []
+    invalid_files = skipped_files
+    
+    for idx, entry in enumerate(parsed_chunk):
+        file_info = filtered_for_llm[idx]["file"]
+        entry["_file"] = file_info
+        
+        amount = utils.clean_amount(entry.get("total_amount"))
+        if amount > 0:
+            entry["total_amount"] = amount
+            db.insert_invoice(entry, user_id=user_id)
+            valid_files.append(file_info)
+        else:
+            invalid_files.append(file_info)
 
-                batch_data.append(item["lines"])
+    # 5. Move Files in Drive
+    drive_manager.move_files_drive(valid_files, "valid_docs", DRIVE_DIRS)
+    drive_manager.move_files_drive(invalid_files, "invalid_docs", DRIVE_DIRS)
+    
+    logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.")
 
-                file_path_mapping.append({
-                    "id": item["id"],
-                    "name": item["name"]
-                })
+def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict):
+    st.info("📄 Processing invoices... Please do not refresh the page.")
+    all_files = drive_manager.list_files_in_folder(input_folder_id)
+    
+    if not all_files:
+        st.warning("No files found.")
+        return
 
-            KEYWORDS = ["total", "amount due", "grand total", "invoice total, total amount", "total fare", "amount payable", "balance due"]
-            
-            for idx, text in enumerate(batch_data):  
-                has_total = any(
-                    any(k in line.lower() for k in KEYWORDS)
-                    and not re.search(r'0\.00|zero', line.lower())
-                    for line in text
-                    )           
-            
-                if not has_total:
-                    continue            
-                
-                filtered_batch_data.append({
-                    "text": text,
-                    "file": file_path_mapping[idx]
-                })
-            
-            logger.info(f"Keyword filtering: {len(filtered_batch_data)} of {len(batch_data)} files matched keywords")
-                
+    progress_bar = st.progress(0)
+    user_id = st.session_state.get("user_email")
+    batch_size = 10 # Smaller batches for stability
+    
+    for i in range(0, len(all_files), batch_size):
+        batch = all_files[i:i+batch_size]
+        
+        with st.status(f"Processing batch {i//batch_size + 1}...", expanded=True) as status:
             try:
-                # Use LLM for robust extraction
-                if filtered_batch_data:
-                     # If we matched keywords, prioritize those
-                    chunk_texts = [item["text"] for item in filtered_batch_data]
-                    source_mapping = filtered_batch_data
-                else:
-                    # Fallback: process everything if nothing matched (User request)
-                    # Use original batch_data and file_path_mapping
-                    chunk_texts = ["\n".join(lines) if isinstance(lines, list) else str(lines) for lines in batch_data]
-                    source_mapping = [{"file": f, "text": ""} for f in file_path_mapping] # dummy text wrapper to match structure
-
-                parsed_chunk = invoice_processor.parse_invoices_with_llm(chunk_texts)
-                logger.info(f"LLM parsing complete: {len(parsed_chunk)} invoices parsed from {len(chunk_texts)} documents")
-                
-                # Add file information to each parsed entry
-                for k, entry in enumerate(parsed_chunk):
-                    if k < len(source_mapping):
-                        if "file" in source_mapping[k]:
-                             entry["_file"] = source_mapping[k]["file"]
-                        else:
-                             # Should usually match file_path_mapping index k if we used batch_data
-                             entry["_file"] = file_path_mapping[k]
-                    else:
-                        entry["_file"] = {}
-
-                parsed_data.extend(parsed_chunk)
-                            
-                filtered_data = []
-                
-                for idx, entry in enumerate(parsed_data):
-                    value = str(entry.get("total_amount", ""))
-                    total = re.sub(r'[^\d.]', '', value.replace(",", "").replace("$", "").replace("₹", "").strip())
-
-                    if invoice_processor.is_valid_invoice(total):
-                        entry["total_amount"] = total
-                        filtered_data.append(entry)
-                        valid_file_paths.append(entry["_file"])
-                    else:
-                        not_valid_file_paths.append(entry["_file"])
-
-                st.info(f"Parsed invoices count: {len(parsed_data)}")
-                st.info(f"Valid invoices count: {len(filtered_data)}")
-                st.info(f"Invalid invoices count: {len(unsupported_files)}")
-                logger.info(f"Validation complete: {len(filtered_data)} valid invoices out of {len(parsed_data)} parsed")
-
-                from db import insert_invoice
-
-                user_id = st.session_state.get("user_email", "")
-                if not user_id:
-                    raise RuntimeError("Missing logged-in user email; cannot safely store invoices without tenant id.")
-
-                for entry in filtered_data:
-                    entry["raw_text"] = entry.get("raw_text", "")  # optional
-                    entry["vendor_name"] = entry.get("vendor_name", "")
-                    entry["invoice_date"] = entry.get("invoice_date", "")  # Ensure invoice_date is always set
-                    # entry["extraction_method"] is already present from processor
-                    insert_invoice(entry, user_id=user_id)
-                
-                logger.info(f"Database insertion complete: {len(filtered_data)} invoices inserted for user {user_id}")
-
-                # batch_wise_filtered_data.append(filtered_data)
-                
+                process_batch(batch, drive_manager, processor, user_id, DRIVE_DIRS)
+                status.update(label=f"✅ Batch {i//batch_size + 1} complete", state="complete", expanded=False)
             except Exception as e:
-                logger.error(f"Batch processing error: {e}", exc_info=True)
-                st.error(f"❌ Failed to parse or extract batch: {e}")
-                with open("failed_batch.json", "w", encoding="utf-8") as f:
-                    f.write(json.dumps(filtered_batch_data, indent=2))
-                continue
+                logger.error(f"Error in batch: {e}")
+                st.error(f"Error processing batch: {e}")
+                status.update(label=f"❌ Batch {i//batch_size + 1} failed", state="error")
             
-            filtered_batch_data.clear()
-            time.sleep(randint(3, 7))
-            
-            # Include unsupported/unextractable files in invalid bucket (so nothing is missed silently)
-            for f in unsupported_files:
-                not_valid_file_paths.append(f)
+        progress_bar.progress(min((i + batch_size) / len(all_files), 1.0))
+        time.sleep(randint(1, 3))
+        gc.collect()
 
-            # Move processed files in Drive
-            logger.info(f"Moving files: {len(valid_file_paths)} valid, {len(not_valid_file_paths)} invalid")        
-            drive_manager.move_files_drive(
-                valid_file_paths,
-                dest_dir="valid_docs",
-                drive_dirs=DRIVE_DIRS
-            )
-            time.sleep(2) 
-            drive_manager.move_files_drive(
-                not_valid_file_paths,
-                dest_dir="invalid_docs",
-                drive_dirs=DRIVE_DIRS
-            )
-            
-            processed_files += len(batch)
-            progress.progress(min(processed_files / total_files, 1.0))
-
-            batch_extracted.clear()
-            batch_data.clear()
-            file_path_mapping.clear()
-            gc.collect()
-            valid_file_paths.clear()
-            not_valid_file_paths.clear()
-            
-            # Show only current user's data here
-            st.dataframe(db.read_db(user_id=st.session_state.get("user_email", ""), is_admin=False))
-            
-    except Exception as e:
-        logger.error(f"❌ Main processing error: {e}")
-
-    finally:
-        status.info("✅ Processing complete!")
-        logger.info(f"Processing completed in {time.time()-start_time:.2f}s")
-        st.success(f"✅ Completed in {time.time()-start_time:.2f}s")
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        logger.info(f"Loop execution time: {elapsed_time:.2f}s")
-
+    st.success("✅ Processing complete!")
+    st.toast("Invoices processed successfully!", icon="✅")
 
 def initiate_drive(creds):
-    invoice_processor = InvoiceProcessor()
-    drive_manager = DriveManager(creds)
-            
-    INPUT_DOCS = st.secrets["INPUT_DOCS"]        
-
+    processor = InvoiceProcessor()
+    drive = DriveManager(creds)
+    
     if st.button("Start Invoice Processing"):
-        input_docs_folder_id = drive_manager.get_or_create_folder(INPUT_DOCS)
-        
-        PROJECT_ROOT = "Invoice_Processing"
-        
-        st.subheader("🚀 Initializing workspace")
-        progress = st.progress(0)
-        status = st.empty()
-        
-        # Step 1: Root folder
-        status.info("📁 Checking root folder...")
-        root_folder_id = drive_manager.get_or_create_folder(PROJECT_ROOT)
-        
-        progress.progress(25)
-        st.info(f"Processing files from folder: {INPUT_DOCS}")
+        input_folder_id = drive.get_or_create_folder(st.secrets["INPUT_DOCS"])
+        root_id = drive.get_or_create_folder("Invoice_Processing")
         
         DRIVE_DIRS = {
-            "project_id": root_folder_id,
-            "valid_docs": drive_manager.get_or_create_folder(
-                "scanned_docs", root_folder_id
-            ),
-            "invalid_docs": drive_manager.get_or_create_folder(
-                "invalid_docs", root_folder_id
-            ),
+            "project_id": root_id,
+            "valid_docs": drive.get_or_create_folder("scanned_docs", root_id),
+            "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
         }
-
-        progress.progress(100)
-        status.success("✅ Initialization complete")
-        time.sleep(1)
         
-        start_processing(drive_manager, invoice_processor, input_docs_folder_id, DRIVE_DIRS)
-
+        start_processing(drive, processor, input_folder_id, DRIVE_DIRS)
         st.session_state["drive_ready"] = True
-
-    

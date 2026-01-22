@@ -1,10 +1,22 @@
 import streamlit as st
 import db
-import oauth
 import chat_bot
+import auth_utils
 from app_logger import get_logger
 
 logger = get_logger(__name__)
+
+def validate_environment():
+    """Ensures all required secrets are present before starting the app."""
+    required_keys = ["supabase_url", "supabase_key", "openai_api_key", "gemini_api_key", "admin_email"]
+    missing = [k for k in required_keys if not st.secrets.get(k)]
+    
+    if missing:
+        st.error(f"❌ Critical Configuration Error: Missing secrets in secrets.toml: {', '.join(missing)}")
+        st.info("💡 Please provide these keys in your Streamlit secrets/secrets.toml file.")
+        st.stop()
+
+validate_environment()
 
 st.set_page_config(page_title="Invoices AI Manager", layout="wide")
 
@@ -17,9 +29,8 @@ st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home
 st.sidebar.button("Chat_Bot", on_click=lambda: st.query_params.update({"view": "chat"}))
 st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"view": "drive"}))
 
-user_email = st.session_state.get("user_email", "")
-admin_email = st.secrets.get("admin_email", "").strip().lower()
-is_admin = (user_email or "").strip().lower() == admin_email
+user_email = auth_utils.get_logged_in_user()
+is_admin = auth_utils.is_admin()
 
 st.sidebar.markdown("---")
 if is_admin:

@@ -151,6 +151,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
     
     return "{}", "None"
 
+@st.cache_data(show_spinner=False)
 def extract_filter_parameters(user_input: str) -> Optional[Dict]:
     """Uses LLM to extract structured filter parameters from natural language."""
     prompt = f"""
@@ -164,7 +165,7 @@ def extract_filter_parameters(user_input: str) -> Optional[Dict]:
       "start_date": "Feb 01 2013",
       "end_date": "Feb 28 2013",
       "category": null, 
-      "invoice_no": null,
+      "invoice_number": null,
       "action": "details | total | count | highest | lowest"
     }}
     
@@ -185,6 +186,7 @@ def extract_filter_parameters(user_input: str) -> Optional[Dict]:
             
     return None
 
+@st.cache_data(show_spinner=False)
 def generate_human_response(query: str, invoices: list, total: float, min_inv: Any, max_inv: Any) -> Tuple[str, str]:
     """Uses LLM to generate a natural language response based on the data found."""
     count = len(invoices)
