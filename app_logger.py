@@ -41,13 +41,23 @@ class SupabaseHandler(logging.Handler):
 
             msg = self.format(record)
             
-            # Attempt to get user_id from Streamlit session
+            # Attempt to get session-specific info
+            user_id = "System"
+            session_id = "Unknown"
+            
             try:
-                user_id = st.session_state.get("user_email", "System")
-                if not user_id:
-                     user_id = "System"
+                # Capture User Email
+                user_email = st.session_state.get("user_email")
+                if user_email:
+                    user_id = user_email
+                
+                # Capture Session ID to distinguish between different "System" users
+                from streamlit.runtime.scriptrunner import get_script_run_ctx
+                ctx = get_script_run_ctx()
+                if ctx:
+                    session_id = ctx.session_id
             except Exception:
-                user_id = "System"
+                pass
 
             ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
             
@@ -56,7 +66,8 @@ class SupabaseHandler(logging.Handler):
                 "level": record.levelname,
                 "name": record.name,
                 "message": msg,
-                "user_id": user_id
+                "user_id": user_id,
+                "session_id": session_id
             }
             
             # Non-blocking fire-and-forget isn't easily built-in for the client,
