@@ -12,7 +12,6 @@ import data_normalization_utils as utils
 import pdf_engine
 import vision_engine
 import config
-from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
 
@@ -65,8 +64,9 @@ class InvoiceProcessor:
         return parsed_invoices
 
     def extractor(self, service, files: List[Dict]) -> List[Dict]:
-        """Coordinates multi-threaded text extraction from various file types."""
-        logger.info(f"Starting parallel extraction for {len(files)} file(s)")
+        """Coordinates text extraction from various file types sequentially for stability."""
+        logger.info(f"Starting extraction for {len(files)} file(s)")
+        results = []
 
         def _get_bytes(file_id: str, is_export=False, mime_type=None) -> bytes:
             fh = io.BytesIO()
@@ -79,7 +79,7 @@ class InvoiceProcessor:
             while not done: _, done = downloader.next_chunk()
             return fh.getvalue()
 
-        def _process_single_file(f):
+        for f in files:
             name, file_id, mime = f.get("name", ""), f.get("id", ""), f.get("mimeType", "")
             ext = os.path.splitext(name)[1].lower()
             text, error = "", ""
@@ -104,13 +104,10 @@ class InvoiceProcessor:
                 error = str(e)
                 logger.error(f"Error extracting {name}: {e}")
 
-            return {
+            results.append({
                 "id": file_id, "name": name, "mimeType": mime,
                 "lines": [l.strip() for l in (text or "").splitlines() if l.strip()],
                 "extract_error": error
-            }
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            results = list(executor.map(_process_single_file, files))
+            })
 
         return results

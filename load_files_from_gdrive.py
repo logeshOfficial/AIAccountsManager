@@ -9,7 +9,6 @@ import db
 import data_normalization_utils as utils
 from drive_manager import DriveManager
 from invoice_processor import InvoiceProcessor
-from concurrent.futures import ThreadPoolExecutor
 from app_logger import get_logger
 
 logger = get_logger(__name__)

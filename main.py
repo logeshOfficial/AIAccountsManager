@@ -99,7 +99,7 @@ if view == "home":
         cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description", "user_id"]
         if not is_admin:
             cols_to_show.remove("user_id")
-        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], use_container_width=True)
+        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")
     else:
         st.info("No invoices found. Go to Drive Manager to sync your data.")
     

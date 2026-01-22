@@ -95,4 +95,4 @@ def run_chat_interface():
                     # Show only relevant columns for a clean UI
                     display_df = pd.DataFrame(filtered_invoices)
                     cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description", "extraction_method"]
-                    st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]])
+                    st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], width="stretch")
