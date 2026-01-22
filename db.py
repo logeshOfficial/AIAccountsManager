@@ -90,12 +90,12 @@ def read_db(user_id: str | None = None, is_admin: bool = False):
         
         if is_admin:
             # Admins see everything
-            response = query.order("created_at", desc=True).execute()
+            response = query.order("timestamp", desc=True).execute()
         else:
             if not user_id:
                 return pd.DataFrame([])
             # Filter by user_id
-            response = query.eq("user_id", user_id).order("created_at", desc=True).execute()
+            response = query.eq("user_id", user_id).order("timestamp", desc=True).execute()
             
         return pd.DataFrame(response.data)
 

@@ -24,8 +24,14 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     skipped_files = []
 
     for item in batch_extracted:
+        # If extraction failed but it's an image, we still move forward to parsing 
+        # (the error might just be a timeout, and LLM might have partial text)
         if item.get("extract_error") and not item.get("lines"):
-            skipped_files.append({"id": item["id"], "name": item["name"]})
+            if any(item["name"].lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg"]):
+                logger.warning(f"Soft skip on vision error for {item['name']}. Retrying with null content.")
+                filtered_for_llm.append({"text": "", "file": {"id": item["id"], "name": item["name"]}})
+            else:
+                skipped_files.append({"id": item["id"], "name": item["name"]})
             continue
             
         text_lines = item["lines"]
