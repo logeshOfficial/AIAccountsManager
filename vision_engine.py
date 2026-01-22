@@ -4,9 +4,20 @@ import streamlit as st
 from PIL import Image
 from google import genai
 from openai import OpenAI
+from transformers import pipeline
 from app_logger import get_logger
 
 logger = get_logger(__name__)
+
+@st.cache_resource
+def get_hf_pipeline():
+    """Loads and caches the Hugging Face image-to-text pipeline."""
+    logger.info("📦 Loading Hugging Face Vision Model (remiai3/Image_Captioning_nlpconnect_vit-gpt2-image-captioning)...")
+    try:
+        return pipeline("image-to-text", model="remiai3/Image_Captioning_nlpconnect_vit-gpt2-image-captioning")
+    except Exception as e:
+        logger.error(f"Failed to load HF pipeline: {e}")
+        return None
 
 @st.cache_resource
 def get_gemini_client(api_key: str):
@@ -62,9 +73,9 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
         logger.warning(f"✗ Tier 1 (Gemini) major failure for {file_name}: {e}")
 
     # --- Tier 2: OpenAI Vision ---
-    openai_key = st.secrets.get("openai_api_key")
-    if openai_key and str(openai_key).startswith("sk-"):
-        try:
+    try:
+        openai_key = st.secrets.get("openai_api_key")
+        if openai_key and str(openai_key).startswith("sk-"):
             client = get_openai_client(openai_key)
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
             
@@ -86,8 +97,22 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
             if response.choices[0].message.content:
                 logger.info(f"✓ Tier 2 (OpenAI Mini) extracted text from: {file_name}")
                 return response.choices[0].message.content
-        except Exception as e:
-            logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {file_name}: {e}")
+    except Exception as e:
+        logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {file_name}: {e}")
+
+    # --- Tier 3: Hugging Face Local Fallback ---
+    try:
+        logger.info("🔄 Falling back to Tier 3: Hugging Face Local Inference...")
+        pipe = get_hf_pipeline()
+        if pipe:
+            img = Image.open(io.BytesIO(image_bytes))
+            result = pipe(img)
+            if result and len(result) > 0:
+                caption = result[0].get('generated_text', '')
+                logger.info(f"✓ Tier 3 (Hugging Face) generated caption: {caption}")
+                return f"Image Caption (Fallback): {caption}"
+    except Exception as e:
+        logger.error(f"✗ Tier 3 (Hugging Face) failed for {file_name}: {e}")
 
     logger.error(f"All vision fallback tiers failed for {file_name}")
     return ""

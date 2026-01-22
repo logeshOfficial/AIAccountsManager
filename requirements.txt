@@ -16,4 +16,5 @@ openai
 pillow
 groq
 supabase
-
+transformers
+torch

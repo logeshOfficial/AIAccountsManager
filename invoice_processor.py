@@ -117,7 +117,7 @@ class InvoiceProcessor:
             while not done: _, done = downloader.next_chunk()
             return fh.getvalue()
 
-        for f in files:
+        for idx, f in enumerate(files):
             name, file_id, mime = f.get("name", ""), f.get("id", ""), f.get("mimeType", "")
             ext = os.path.splitext(name)[1].lower()
             text, error = "", ""
@@ -135,7 +135,7 @@ class InvoiceProcessor:
                     text = df.fillna("").to_csv(index=False)
                 elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
                     # Add mandatory cooldown for images to avoid Free Tier Rate Limits (429)
-                    if f > 0: time.sleep(3) 
+                    if idx > 0: time.sleep(3) 
                     text = vision_engine.extract_text_with_vision(_get_bytes(file_id), name)
                     if not text: error = "Vision extraction failed (Limit reached or API error)"
                 else:
