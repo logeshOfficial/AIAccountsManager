@@ -55,6 +55,7 @@ def insert_invoice(invoice, user_id: str):
         logger.info(f"Skipping duplicate invoice: {invoice['_file']['name']} (ID: {invoice['_file']['id']})")
         return
 
+    ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S %Z")
     try:
         data = {
             "user_id": user_id,
@@ -68,7 +69,7 @@ def insert_invoice(invoice, user_id: str):
             "total_amount": float(invoice.get("total_amount", 0) or 0),
             "raw_text": invoice.get("raw_text", ""),
             "extraction_method": invoice.get("extraction_method", "Unknown"),
-            "created_at": datetime.datetime.now(IST).isoformat()
+            "timestamp": ts 
         }
         
         client.table("invoices").insert(data).execute()
