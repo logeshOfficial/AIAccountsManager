@@ -75,7 +75,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
                     {"role": "system", "content": "You are a precise financial invoice assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=500
+                max_tokens=5000
             )
             logger.info(f"LLM Call successful using model: {model_name}")
             return response.choices[0].message.content.strip(), model_name
@@ -98,7 +98,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
                     {"role": "system", "content": "You are a precise financial invoice assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=500
+                max_tokens=5000
             )
             
             logger.info(f"LLM Call successful using Groq fallback: {model_name}")
