@@ -8,6 +8,7 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib 
 streamlit
+altair<5
 
 google-genai
 openai
