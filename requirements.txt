@@ -7,8 +7,9 @@ python-dateutil
 google-api-python-client 
 google-auth-httplib2
 google-auth-oauthlib 
-streamlit
+streamlit>=1.40.0
 altair<5
+standard-imghdr
 
 google-genai
 openai
