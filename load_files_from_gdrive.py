@@ -121,9 +121,8 @@ def initiate_drive(creds):
     DRIVE_DIRS = setup_drive_folders(drive)
     st.session_state["drive_dirs"] = DRIVE_DIRS
     
-    st.success(f"Before you click the below button to start the progress, Please upload the invoice files in you Google drive '{st.secrets['INPUT_DOCS']}' folder then proceed.")
-    # st.success(f"Successfully created '{st.secrets['INPUT_DOCS']}' folder in your 📂 Google Drive. Kindly please upload the invoice files then click the button below to start process")
-
+    st.success(f"Before you click the below button to start the progress, Please upload the invoice files in you Google drive '{st.secrets['INPUT_DOCS']}' folder.")
+    
     if st.button("🚀 Start Invoice Processing"):
         start_processing(drive, processor, DRIVE_DIRS["input_folder_id"], DRIVE_DIRS)
         st.session_state["drive_ready"] = True

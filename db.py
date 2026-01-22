@@ -3,7 +3,8 @@ from supabase import create_client, Client
 import json 
 import pandas as pd
 from typing import Tuple, Optional
-from app_logger import get_logger
+import datetime
+from app_logger import get_logger, IST
 
 logger = get_logger(__name__)
 
@@ -66,7 +67,8 @@ def insert_invoice(invoice, user_id: str):
             "description": invoice.get("description"),
             "total_amount": float(invoice.get("total_amount", 0) or 0),
             "raw_text": invoice.get("raw_text", ""),
-            "extraction_method": invoice.get("extraction_method", "Unknown")
+            "extraction_method": invoice.get("extraction_method", "Unknown"),
+            "created_at": datetime.datetime.now(IST).isoformat()
         }
         
         client.table("invoices").insert(data).execute()

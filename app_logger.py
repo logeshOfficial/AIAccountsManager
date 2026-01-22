@@ -41,30 +41,20 @@ class SupabaseHandler(logging.Handler):
 
             msg = self.format(record)
             
-            # 1. Identity Priority: 
-            #   A. Explicitly passed in logger.info(msg, extra={"user_id": "..."})
-            #   B. st.session_state["user_email"]
-            #   C. "System" + session_id
-            
+            # 1. Identity Requirement: Only log if we have a valid email.
             user_id = getattr(record, "user_id", None)
-            session_id = "Unknown"
             
             try:
-                # Capture Session ID first
-                from streamlit.runtime.scriptrunner import get_script_run_ctx
-                ctx = get_script_run_ctx()
-                if ctx:
-                    session_id = ctx.session_id
-                
-                # If no explicit user_id, check session_state
+                # If no explicit user_id was passed, try to fetch from session_state
                 if not user_id:
                     user_id = st.session_state.get("user_email")
-                
             except Exception:
                 pass
 
-            if not user_id:
-                user_id = "System"
+            # If still no user_id (e.g., initial app load/not logged in), 
+            # we skip the Supabase log to keep the database strictly for user actions.
+            if not user_id or str(user_id).lower() in ("system", "unknown", "none"):
+                return
 
             ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S %Z")
             
@@ -73,8 +63,7 @@ class SupabaseHandler(logging.Handler):
                 "level": record.levelname,
                 "name": record.name,
                 "message": msg,
-                "user_id": user_id,
-                "session_id": session_id
+                "user_id": user_id
             }
             
             # Stage 1: Try full insert with session_id
