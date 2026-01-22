@@ -70,7 +70,7 @@ def insert_invoice(invoice, user_id: str):
         }
         
         client.table("invoices").insert(data).execute()
-        logger.info(f"Successfully inserted invoice to Supabase: {invoice['_file']['name']}")
+        logger.info(f"Successfully inserted invoice to Supabase: {invoice['_file']['name']}", extra={"user_id": user_id})
         
     except Exception as e:
         logger.error(f"Error while insert_invoice to Supabase: {e}")
@@ -116,7 +116,7 @@ def delete_user_data(user_id: str) -> Tuple[bool, str]:
             
         client.table("invoices").delete().eq("user_id", user_id).execute()
         
-        logger.info(f"User {user_id} deleted their data ({count} records) from Supabase.")
+        logger.info(f"User {user_id} deleted their data ({count} records) from Supabase.", extra={"user_id": user_id})
         return True, f"Successfully deleted {count} records."
         
     except Exception as e:

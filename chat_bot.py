@@ -72,7 +72,7 @@ def run_chat_interface():
                     filtered_invoices, min_inv, max_inv = invoice_manager.filter_by_date_and_category(
                         invoices, start, end, params.get("category")
                     )
-                    st.info(f"Filtered {len(filtered_invoices)} invoices from {start.strftime('%b %d, %Y')} to {end.strftime('%b %d, %Y')}")
+                    st.info(f"Filtered {len(filtered_invoices)} invoices from {start.strftime('%d-%b-%Y')} to {end.strftime('%d-%b-%Y')}")
                 except ValueError:
                     st.error("Date parsing failed. Please try a clearer date format.")
                     return

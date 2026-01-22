@@ -41,25 +41,32 @@ class SupabaseHandler(logging.Handler):
 
             msg = self.format(record)
             
-            # Attempt to get session-specific info
-            user_id = "System"
+            # 1. Identity Priority: 
+            #   A. Explicitly passed in logger.info(msg, extra={"user_id": "..."})
+            #   B. st.session_state["user_email"]
+            #   C. "System" + session_id
+            
+            user_id = getattr(record, "user_id", None)
             session_id = "Unknown"
             
             try:
-                # Capture User Email
-                user_email = st.session_state.get("user_email")
-                if user_email:
-                    user_id = user_email
-                
-                # Capture Session ID to distinguish between different "System" users
+                # Capture Session ID first
                 from streamlit.runtime.scriptrunner import get_script_run_ctx
                 ctx = get_script_run_ctx()
                 if ctx:
                     session_id = ctx.session_id
+                
+                # If no explicit user_id, check session_state
+                if not user_id:
+                    user_id = st.session_state.get("user_email")
+                
             except Exception:
                 pass
 
-            ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+            if not user_id:
+                user_id = "System"
+
+            ts = datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S %Z")
             
             data = {
                 "timestamp": ts,

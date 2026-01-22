@@ -58,27 +58,38 @@ def regex_parse_invoice(text: str) -> Dict[str, str]:
     inv_match = re.search(r'(?:invoice|bill|challan|#|receipt)\s*(?:no|number|#)?\s*:?\s*([A-Z0-9\-/]+)', text, re.I)
     if inv_match: data["invoice_number"] = inv_match.group(1).strip()
     
-    date_match = re.search(r'(?:date|dated|journey|boarding)\s*:?\s*([0-9]{1,2}[/\-\.\s]+(?:[0-9]{1,2}|[A-Za-z]{3})[/\-\.\s]+[0-9]{2,4})', text, re.I)
+    date_match = re.search(r'(?:date|dated|journey|boarding|boarding\s*date)\s*:?\s*([0-9]{1,2}[/\-\.\s]+(?:[0-9]{1,2}|[A-Za-z]{3})[/\-\.\s]+[0-9]{2,4})', text, re.I)
     if date_match: 
         data["invoice_date"] = normalize_date(date_match.group(1))
     else:
-        # Fallback date search for orphaned dates (like 12-Sep-2025)
-        orphaned_date = re.search(r'(\d{1,2}-[A-Za-z]{3}-\d{4})', text)
+        # Fuzzy fallback for orphaned dates (like 12-Sep-2025 or 12/09/2025)
+        orphaned_date = re.search(r'(\d{1,2}[-/](?:[A-Za-z]{3}|\d{1,2})[-/]\d{2,4})', text)
         if orphaned_date: data["invoice_date"] = normalize_date(orphaned_date.group(1))
     
     gst_match = re.search(r'(?:gst|gstin)\s*:?\s*([0-9A-Z]{15})', text, re.I)
     if gst_match: data["gst_number"] = gst_match.group(1).strip()
     
-    # Enhanced amount search: 
-    # Try IRCTC specific "Total Fare" first
-    fare_match = re.search(r'(?:total fare|ticket fare|all inclusive)\s*[^\d₹]*(\d+,?\d*\.?\d*)', text, re.I)
-    if fare_match:
-        data["total_amount"] = fare_match.group(1).replace(",", "")
+    # Enhanced Universal Amount Search (Fuzzy & Greedy): 
+    # Stage 1: Search with high-priority business keywords (includes retail and travel)
+    priority_amount_patterns = [
+        r'(?:total invoice value|invoice value|total fare|ticket fare|fare\s*\(all\s*inclusive\))\s*[^\d₹$]*([\d,]+\.?\d*)',
+        r'(?:grand total|total amount|amount due|total payment|amount payable)\s*:?\s*[^\d₹$]*([\d,]+\.?\d*)'
+    ]
+    
+    found_amounts = []
+    for pattern in priority_amount_patterns:
+        matches = re.findall(pattern, text, re.I)
+        for m in matches:
+            val = clean_amount(m)
+            if val > 0: found_amounts.append(val)
+    
+    if found_amounts:
+        # Strategy: Pick the largest amount to ensure tax/sub-totals are ignored
+        data["total_amount"] = str(max(found_amounts))
     else:
-        # General amount search
-        amounts = re.findall(r'(?:total|grand total|amount due|fare)\s*:?\s*[^\d₹]*([\d,]+\.?\d*)', text, re.I)
-        if amounts:
-            # Pick the largest amount found near "total" words, to skip small fees
-            data["total_amount"] = max([float(a.replace(",", "")) for a in amounts])
+        # Ultimate fallback: look for any line containing "total" followed by a decimal number
+        total_line_match = re.search(r'total.*?(?:[:₹$])\s*([\d,]+\.\d{2})', text, re.I)
+        if total_line_match:
+            data["total_amount"] = total_line_match.group(1).replace(",", "")
     
     return data

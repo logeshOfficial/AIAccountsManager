@@ -67,7 +67,7 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     drive_manager.move_files_drive(valid_files, "valid_docs", DRIVE_DIRS)
     drive_manager.move_files_drive(invalid_files, "invalid_docs", DRIVE_DIRS)
     
-    logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.")
+    logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.", extra={"user_id": user_id})
 
 def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict):
     st.info("📄 Processing invoices... Please do not refresh the page.")

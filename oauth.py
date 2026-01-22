@@ -26,7 +26,8 @@ def _scopes():
     ]
 
 def logout():
-    logger.info("User logging out")
+    user_email = st.session_state.get("user_email", "System")
+    logger.info(f"User logging out: {user_email}", extra={"user_id": user_email})
     st.session_state.clear()
     st.success("Logged out")
     st.rerun()
@@ -57,8 +58,9 @@ def ensure_google_login(show_ui: bool = True):
         try:
             oauth2 = build("oauth2", "v2", credentials=flow.credentials)
             info = oauth2.userinfo().get().execute()
-            st.session_state["user_email"] = (info or {}).get("email", "")
-            logger.info(f"User logged in successfully: {st.session_state['user_email']}")
+            email = (info or {}).get("email", "")
+            st.session_state["user_email"] = email
+            logger.info(f"User logged in successfully: {email}", extra={"user_id": email})
         except Exception as e:
             logger.error(f"Failed to fetch user email after login: {e}")
             # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
