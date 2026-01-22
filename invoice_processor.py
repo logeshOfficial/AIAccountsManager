@@ -32,31 +32,45 @@ class InvoiceProcessor:
             raise ValueError("Could not extract valid JSON from LLM response")
 
     def parse_invoices_with_llm(self, invoice_texts: List[str]) -> List[Dict]:
-        """Uses LLM to extract structured data from invoice texts."""
+        """Uses LLM to extract structured data with a multi-stage validation and retry mechanism."""
         parsed_invoices = []
-        logger.info(f"Starting LLM parsing for {len(invoice_texts)} document(s)")
+        logger.info(f"Starting Guaranteed LLM parsing for {len(invoice_texts)} document(s)")
         
         for i, invoice_text in enumerate(invoice_texts):
             full_text = invoice_text if isinstance(invoice_text, str) else "\n".join(invoice_text)
             
-            prompt = f"""
-            {config.prompt}
-            
-            Invoice Text Content:
-            {full_text[:4000]}
-            """
+            # --- Stage 1: Primary Extraction ---
+            prompt = f"{config.prompt}\n\nInvoice Text Content:\n{full_text[:4000]}"
             
             try:
                 response_text, model_name = llm_call(prompt)
                 data = self.safe_json_load(response_text)
                 
-                # Normalize extracted data
+                # --- Stage 2: Validation & Deep Extraction Retry ---
+                critical_fields = ["invoice_date", "total_amount", "vendor_name"]
+                missing = [f for f in critical_fields if not data.get(f) or str(data.get(f)).strip() == ""]
+                
+                if missing:
+                    logger.warning(f"⚠️ Doc {i+1}: Missing critical fields {missing}. Triggering Deep Extraction...")
+                    retry_prompt = f"""
+                    RE-EXAMINE the text below specifically for these missing fields: {', '.join(missing)}.
+                    Return ONLY a JSON object updating these fields.
+                    
+                    Text: {full_text[:4000]}
+                    Existing Data: {json.dumps(data)}
+                    """
+                    retry_response, _ = llm_call(retry_prompt)
+                    retry_data = self.safe_json_load(retry_response)
+                    data.update({k: v for k, v in retry_data.items() if v})
+                
+                # Normalize and finish
                 data["invoice_date"] = utils.normalize_date(data.get("invoice_date", ""))
                 data["raw_text"] = full_text
                 data["extraction_method"] = f"LLM ({model_name})"
                 
                 parsed_invoices.append(data)
-                logger.info(f"✓ LLM parsing successful for doc {i+1}/{len(invoice_texts)} using {model_name}")
+                logger.info(f"✓ LLM parsing successful for doc {i+1} using {model_name}")
+                
             except Exception as e:
                 logger.warning(f"LLM Parsing failed for doc {i+1}, falling back to regex: {e}")
                 parsed_invoices.append(utils.regex_parse_invoice(full_text))

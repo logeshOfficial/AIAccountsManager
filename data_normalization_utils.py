@@ -12,7 +12,8 @@ def normalize_date(date_str: str) -> str:
     try:
         dt = parser.parse(str(date_str).strip(), dayfirst=True, fuzzy=True)
         return dt.strftime("%d-%b-%Y")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Normalization failed for date '{date_str}': {e}")
         return date_str
 
 def extract_year_month(date_str: str) -> Tuple[Optional[int], Optional[str]]:
@@ -53,8 +54,8 @@ def regex_parse_invoice(text: str) -> Dict[str, str]:
         "extraction_method": "Regex (Manual)"
     }
     
-    # Simple regex fallbacks (optimized versions of original patterns)
-    inv_match = re.search(r'(?:invoice|bill|challan|#)\s*(?:no|number|#)?\s*:?\s*([A-Z0-9\-/]+)', text, re.I)
+    # Optimized regex for invoice numbers
+    inv_match = re.search(r'(?:invoice|bill|challan|#|receipt)\s*(?:no|number|#)?\s*:?\s*([A-Z0-9\-/]+)', text, re.I)
     if inv_match: data["invoice_number"] = inv_match.group(1).strip()
     
     date_match = re.search(r'(?:date|dated)\s*:?\s*([0-9]{1,2}[/\-\.\s]+[0-9]{1,2}[/\-\.\s]+[0-9]{2,4})', text, re.I)
