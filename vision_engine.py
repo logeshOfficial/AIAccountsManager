@@ -12,9 +12,11 @@ logger = get_logger(__name__)
 @st.cache_resource
 def get_hf_pipeline():
     """Loads and caches the Hugging Face image-to-text pipeline."""
-    logger.info("📦 Loading Hugging Face Vision Model (remiai3/Image_Captioning_nlpconnect_vit-gpt2-image-captioning)...")
+    # Using BLIP as it's more stable/modern than the older vit-gpt2 for the pipeline API
+    model_id = "Salesforce/blip-image-captioning-base"
+    logger.info(f"📦 Loading Hugging Face Vision Model ({model_id})...")
     try:
-        return pipeline("image-to-text", model="remiai3/Image_Captioning_nlpconnect_vit-gpt2-image-captioning")
+        return pipeline("image-to-text", model=model_id)
     except Exception as e:
         logger.error(f"Failed to load HF pipeline: {e}")
         return None
