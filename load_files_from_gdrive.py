@@ -121,7 +121,7 @@ def initiate_drive(creds):
     DRIVE_DIRS = setup_drive_folders(drive)
     st.session_state["drive_dirs"] = DRIVE_DIRS
     
-    st.success(f"📂 Drive Connected! Monitoring folder: '{st.secrets['INPUT_DOCS']}'")
+    st.success(f"From you 📂 Drive I have created {st.secrets['INPUT_DOCS']} folder. Kindly please upload the invoice files that you want processed.")
     
     if st.button("🚀 Start Invoice Processing"):
         start_processing(drive, processor, DRIVE_DIRS["input_folder_id"], DRIVE_DIRS)
