@@ -59,7 +59,9 @@ def ensure_google_login(show_ui: bool = True):
             oauth2 = build("oauth2", "v2", credentials=flow.credentials)
             info = oauth2.userinfo().get().execute()
             st.session_state["user_email"] = (info or {}).get("email", "")
-        except Exception:
+            logger.info(f"User logged in successfully: {st.session_state['user_email']}")
+        except Exception as e:
+            logger.error(f"Failed to fetch user email after login: {e}")
             # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
             st.session_state["user_email"] = ""
 

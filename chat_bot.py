@@ -44,6 +44,7 @@ def run_chat_interface():
     query = st.text_input("Message", placeholder="Type your question here...")
     
     if st.button("Send", type="primary") and query:
+        logger.info(f"User Interrogation: '{query}'")
         with st.spinner("Thinking..."):
             # A. Extract Intent
             params = llm_manager.extract_filter_parameters(query)

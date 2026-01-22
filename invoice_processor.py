@@ -324,8 +324,9 @@ class InvoiceProcessor:
         This is more robust than regex for varied layouts.
         """
         parsed_invoices = []
+        logger.info(f"Starting LLM parsing for {len(invoice_texts)} document(s)")
         
-        for invoice_text in invoice_texts:
+        for i, invoice_text in enumerate(invoice_texts):
             full_text = invoice_text if isinstance(invoice_text, str) else "\n".join(invoice_text)
             
             prompt = f"""
@@ -360,6 +361,7 @@ class InvoiceProcessor:
                     data["raw_text"] = full_text
                     data["extraction_method"] = f"LLM ({model_name})"
                     parsed_invoices.append(data)
+                    logger.info(f"✓ LLM parsing successful for document {i+1}/{len(invoice_texts)} using {model_name}")
                 else:
                     # Fallback to manual if LLM fails to output JSON
                     logger.warning(f"LLM did not return JSON. Falling back to manual parse for this doc.")
@@ -532,9 +534,11 @@ class InvoiceProcessor:
                         pass
 
         results = []
+        logger.info(f"Starting extraction for {len(files)} file(s) from Drive")
         for f in files:
             name = f.get("name", "")
             file_id = f.get("id", "")
+            logger.info(f"Processing file: {name} (ID: {file_id})")
             mime = f.get("mimeType", "") or ""
             ext = os.path.splitext(name)[1].lower()
 
