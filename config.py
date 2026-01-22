@@ -28,6 +28,9 @@ Each invoice should be converted into one or more dictionaries with these keys:
 - DO NOT skip any invoices. Extract data from all invoices provided, even if fields are partially missing.
 - If a field is missing or not found, return an empty string "".
 - Support any currency: USD ($), INR (₹), EUR (€), MYR (RM), etc.
+- Look for "Total Fare" or "Ticket Fare (all inclusive)" for the total_amount.
+- Capturing the correct date: Look for ["Date of Journey", "Date of Boarding", "total invoice value", "invoice value", "total fare (all inclusive)"].
+- If the text is fragmented or shuffled, search the whole document for the highest numerical value near currency symbols as the total_amount.
 - Return all invoice data — do not filter or ignore based on total amount or missing fields.
 - Always return a list of dictionaries — one dictionary per invoice.
 

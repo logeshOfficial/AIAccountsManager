@@ -19,7 +19,7 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     batch_extracted = processor.extractor(drive_manager.service, batch)
     
     # 2. Keyword Filtering
-    KEYWORDS = ["total", "amount due", "grand total", "total amount", "total fare", "balance due"]
+    KEYWORDS = ["total", "amount due", "grand total", "total amount", "total fare", "balance due", "total invoice value", "invoice value", "total fare (all inclusive)"]
     filtered_for_llm = []
     skipped_files = []
 
