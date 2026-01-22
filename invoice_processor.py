@@ -21,18 +21,35 @@ class InvoiceProcessor:
         self.year_month_data = defaultdict(lambda: defaultdict(list))
         
     def safe_json_load(self, text: str) -> Dict:
-        """Safely parses JSON from LLM response strings, handling both dicts and lists."""
+        """Safely parses JSON from LLM response strings, handling nested lists and extracting the main object."""
         if not text or not text.strip():
             raise ValueError("LLM returned empty response")
+        
+        def _unwrap(data):
+            # Recursively unwrap lists until we find a dictionary or empty
+            while isinstance(data, list) and data:
+                data = data[0]
+            return data if isinstance(data, dict) else {}
+
         try:
+            # Try direct parse
             data = json.loads(text)
-            return data[0] if isinstance(data, list) and data else data
+            result = _unwrap(data)
+            if result: return result
         except Exception:
-            match = re.search(r'\{.*\}', text, re.S)
-            if match:
+            pass
+
+        # Try regex extraction
+        match = re.search(r'(\{.*\}|\[.*\])', text, re.S)
+        if match:
+            try:
                 data = json.loads(match.group())
-                return data[0] if isinstance(data, list) and data else data
-            raise ValueError("Could not extract valid JSON from LLM response")
+                result = _unwrap(data)
+                if result: return result
+            except:
+                pass
+                
+        raise ValueError("Could not extract valid JSON dictionary from LLM response")
 
     def parse_invoices_with_llm(self, invoice_texts: List[str]) -> List[Dict]:
         """Uses LLM to extract structured data with a multi-stage validation and retry mechanism."""

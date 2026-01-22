@@ -11,13 +11,13 @@ logger = get_logger(__name__)
 
 @st.cache_resource
 def get_hf_pipeline():
-    """Loads and caches the Hugging Face OCR pipeline (TrOCR)."""
-    # Using TrOCR which is a dedicated OCR model (reads text instead of just describing)
-    model_id = "microsoft/trocr-base-printed"
-    logger.info(f"📦 Loading Hugging Face OCR Model ({model_id})...")
+    """Loads and caches the Hugging Face Donut model for document understanding."""
+    # Donut is specifically trained for document parsing/OCR
+    model_id = "naver-clova-ix/donut-base-finetuned-docvqa"
+    logger.info(f"📦 Loading Hugging Face Donut Model ({model_id})...")
     try:
-        # Note: TrOCR is used with 'image-to-text' pipeline as well
-        return pipeline("image-to-text", model=model_id)
+        # We use it for document understanding
+        return pipeline("document-question-answering", model=model_id)
     except Exception as e:
         logger.error(f"Failed to load HF pipeline: {e}")
         return None
@@ -103,16 +103,21 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     except Exception as e:
         logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {file_name}: {e}")
 
-    # --- Tier 3: Hugging Face Local Fallback (OCR) ---
+    # --- Tier 3: Hugging Face Local Fallback (Donut) ---
     try:
-        logger.info("🔄 Falling back to Tier 3: Hugging Face Local OCR (TrOCR)...")
+        logger.info("🔄 Falling back to Tier 3: Hugging Face Local Donut (Document Understanding)...")
         pipe = get_hf_pipeline()
         if pipe:
             img = Image.open(io.BytesIO(image_bytes))
-            result = pipe(img)
-            if result and len(result) > 0:
-                extracted_text = result[0].get('generated_text', '')
-                logger.info(f"✓ Tier 3 (Hugging Face TrOCR) extracted: {extracted_text}")
+            # Ask a broad question to get text extraction
+            result = pipe(image=img, question="What are all the text fields, dates, and amounts in this invoice?")
+            if result and isinstance(result, list) and len(result) > 0:
+                extracted_text = result[0].get('answer', '')
+                logger.info(f"✓ Tier 3 (Hugging Face Donut) extracted info: {extracted_text}")
+                return extracted_text
+            elif isinstance(result, dict):
+                extracted_text = result.get('answer', '')
+                logger.info(f"✓ Tier 3 (Hugging Face Donut) extracted info: {extracted_text}")
                 return extracted_text
     except Exception as e:
         logger.error(f"✗ Tier 3 (Hugging Face) failed for {file_name}: {e}")
