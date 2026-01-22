@@ -46,34 +46,49 @@ class InvoiceProcessor:
                 response_text, model_name = llm_call(prompt)
                 data = self.safe_json_load(response_text)
                 
-                # --- Stage 2: Validation & Deep Extraction Retry ---
+                # --- Stage 2: Deep Extraction Retry ---
                 critical_fields = ["invoice_date", "total_amount", "vendor_name"]
-                missing = [f for f in critical_fields if not data.get(f) or str(data.get(f)).strip() == ""]
+                missing = [f for f in critical_fields if not data.get(f) or str(data.get(f)).strip() in ("", "None", "null")]
                 
                 if missing:
                     logger.warning(f"⚠️ Doc {i+1}: Missing critical fields {missing}. Triggering Deep Extraction...")
-                    retry_prompt = f"""
-                    RE-EXAMINE the text below specifically for these missing fields: {', '.join(missing)}.
-                    Return ONLY a JSON object updating these fields.
-                    
-                    Text: {full_text[:4000]}
-                    Existing Data: {json.dumps(data)}
-                    """
+                    retry_prompt = f"RE-EXAMINE the text for these missing fields: {', '.join(missing)}.\nText: {full_text[:4000]}\nExisting: {json.dumps(data)}"
                     retry_response, _ = llm_call(retry_prompt)
                     retry_data = self.safe_json_load(retry_response)
-                    data.update({k: v for k, v in retry_data.items() if v})
+                    data.update({k: v for k, v in retry_data.items() if v and str(v).lower() != "none"})
                 
                 # Normalize and finish
                 data["invoice_date"] = utils.normalize_date(data.get("invoice_date", ""))
                 data["raw_text"] = full_text
                 data["extraction_method"] = f"LLM ({model_name})"
                 
-                parsed_invoices.append(data)
-                logger.info(f"✓ LLM parsing successful for doc {i+1} using {model_name}")
-                
             except Exception as e:
-                logger.warning(f"LLM Parsing failed for doc {i+1}, falling back to regex: {e}")
-                parsed_invoices.append(utils.regex_parse_invoice(full_text))
+                logger.warning(f"LLM Primary/Deep failed for doc {i+1}, using Stage 3 (Regex): {e}")
+                data = utils.regex_parse_invoice(full_text)
+                data["raw_text"] = full_text
+
+            # --- Stage 4: Final Rescue (AI) ---
+            # If after Regex/LLM we still lack fields, try one last hyper-focused AI call
+            critical_fields = ["invoice_date", "total_amount", "vendor_name"]
+            still_missing = [f for f in critical_fields if not data.get(f) or str(data.get(f)).strip() in ("", "None", "null", "0", "0.0")]
+            
+            if still_missing and full_text.strip():
+                try:
+                    logger.info(f"🆘 Final Rescue triggered for doc {i+1}: Searching for {still_missing}")
+                    rescue_prompt = f"Extract ONLY these fields: {', '.join(still_missing)}. Format: JSON.\nText: {full_text[:3000]}"
+                    rescue_response, r_model = llm_call(rescue_prompt)
+                    rescue_data = self.safe_json_load(rescue_response)
+                    for k, v in rescue_data.items():
+                        if v and str(v).lower() != "none" and k in critical_fields:
+                            data[k] = v
+                            data["extraction_method"] = f"Rescue AI ({r_model})"
+                except Exception:
+                    pass
+
+            # Final normalization before appending
+            data["invoice_date"] = utils.normalize_date(data.get("invoice_date", ""))
+            parsed_invoices.append(data)
+            logger.info(f"✓ Processing doc {i+1} complete. Method: {data.get('extraction_method')}")
                 
         return parsed_invoices
 

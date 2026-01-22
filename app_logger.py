@@ -70,12 +70,20 @@ class SupabaseHandler(logging.Handler):
                 "session_id": session_id
             }
             
-            # Non-blocking fire-and-forget isn't easily built-in for the client,
-            # but for a simple logger in a Streamlit app, this sync call is usually okay.
-            client.table("logs").insert(data).execute()
-        except Exception:
-            # We don't want logger failures to crash the app
-            pass
+            # Stage 1: Try full insert with session_id
+            try:
+                client.table("logs").insert(data).execute()
+            except Exception as e:
+                # Stage 2: Fallback to basic insert (in case session_id column is missing)
+                try:
+                    basic_data = {k: v for k, v in data.items() if k != "session_id"}
+                    client.table("logs").insert(basic_data).execute()
+                    # If this works, we know the issue was session_id
+                except Exception as e2:
+                    # Stage 3: Complete failure - log to console for developer visibility
+                    print(f"⚠️ Supabase Logging Error: {e2}")
+        except Exception as e_outer:
+            print(f"⚠️ Logger Critical Error: {e_outer}")
 
 def get_logger(name: str) -> logging.Logger:
     """

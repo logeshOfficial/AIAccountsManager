@@ -53,14 +53,14 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
         vendor = str(entry.get("vendor_name", "")).strip()
         date = str(entry.get("invoice_date", "")).strip()
         
-        # PERSISTENCE RULE: Save if we have an amount OR if we have both vendor and date.
-        # This prevents skipping valid documents just because the amount was slightly ambiguous.
-        if amount > 0 or (vendor and date):
+        # ULTRA-PERSISTENCE RULE: Save if we have ANY meaningful data point.
+        # This prevents skipping invoices that might be messy but still have useful info.
+        if amount > 0 or (vendor and vendor != "Unknown") or (date and date != "Unknown"):
             entry["total_amount"] = amount
             db.insert_invoice(entry, user_id=user_id)
             valid_files.append(file_info)
         else:
-            logger.warning(f"Skipping file {file_info['name']}: Insufficient data (Amount: {amount}, Vendor: {vendor}, Date: {date})")
+            logger.warning(f"Skipping file {file_info['name']}: No identifiable data found across 4 extraction stages.")
             invalid_files.append(file_info)
 
     # 5. Move Files in Drive
