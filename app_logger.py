@@ -13,19 +13,23 @@ class SupabaseHandler(logging.Handler):
     Custom logging handler that writes logs to a Supabase table.
     Captures the current Streamlit user_email if available.
     """
+    _client = None
+
     def __init__(self):
         super().__init__()
-        # Note: We initialize the client inside emit to handle streamlit context better
-        # and ensure it's available when needed.
 
     def _get_supabase_client(self):
+        if SupabaseHandler._client:
+            return SupabaseHandler._client
+
         from supabase import create_client
         url = st.secrets.get("supabase_url")
         key = st.secrets.get("supabase_key")
         if not url or not key:
             return None
         try:
-            return create_client(url, key)
+            SupabaseHandler._client = create_client(url, key)
+            return SupabaseHandler._client
         except Exception:
             return None
 

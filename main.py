@@ -2,6 +2,7 @@ import streamlit as st
 import db
 import chat_bot
 import auth_utils
+import oauth
 from app_logger import get_logger
 
 logger = get_logger(__name__)
@@ -93,7 +94,14 @@ if view == "home":
 
     # Security: normal users only see their own rows; admin sees everything.
     df = db.read_db(user_id=user_email, is_admin=is_admin)
-    st.dataframe(df)
+    
+    if not df.empty:
+        cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description", "user_id"]
+        if not is_admin:
+            cols_to_show.remove("user_id")
+        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], use_container_width=True)
+    else:
+        st.info("No invoices found. Go to Drive Manager to sync your data.")
     
 elif view == "chat":
     chat_bot.run_chat_interface()

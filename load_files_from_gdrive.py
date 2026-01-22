@@ -89,7 +89,7 @@ def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, i
                 status.update(label=f"❌ Batch {i//batch_size + 1} failed", state="error")
             
         progress_bar.progress(min((i + batch_size) / len(all_files), 1.0))
-        time.sleep(randint(1, 3))
+        time.sleep(0.5) 
         gc.collect()
 
     st.success("✅ Processing complete!")

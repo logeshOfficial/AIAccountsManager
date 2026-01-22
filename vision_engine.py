@@ -8,6 +8,14 @@ from app_logger import get_logger
 
 logger = get_logger(__name__)
 
+@st.cache_resource
+def get_gemini_client(api_key: str):
+    return genai.Client(api_key=api_key)
+
+@st.cache_resource
+def get_openai_client(api_key: str):
+    return OpenAI(api_key=api_key)
+
 def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     """
     Extracts text from image bytes using a 3-tier fallback vision system.
@@ -20,7 +28,7 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     try:
         gemini_key = st.secrets.get("gemini_api_key")
         if gemini_key:
-            client = genai.Client(api_key=gemini_key)
+            client = get_gemini_client(gemini_key)
             img = Image.open(io.BytesIO(image_bytes))
             prompt = "Extract all text from this invoice image. Return the complete text content."
             
@@ -46,7 +54,7 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     openai_key = st.secrets.get("openai_api_key")
     if openai_key and openai_key.startswith("sk-"):
         try:
-            client = OpenAI(api_key=openai_key)
+            client = get_openai_client(openai_key)
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
             
             response = client.chat.completions.create(
@@ -70,7 +78,7 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     # --- Tier 3: OpenAI Vision Premium ---
     if openai_key and openai_key.startswith("sk-"):
         try:
-            client = OpenAI(api_key=openai_key)
+            client = get_openai_client(openai_key)
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
             
             response = client.chat.completions.create(

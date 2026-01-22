@@ -3,6 +3,7 @@ import ai_models
 import json
 import re
 from typing import Tuple, Dict, Optional, Any
+from google.genai import types
 from app_logger import get_logger
 
 logger = get_logger(__name__)
@@ -113,7 +114,6 @@ def llm_call(prompt: str) -> Tuple[str, str]:
     if gemini_client:
         model_name = st.secrets.get("gemini_model", DEFAULT_FALLBACK_MODEL)
         try:
-            from google.genai import types
             
             # Use system instruction if available in new SDK
             try:

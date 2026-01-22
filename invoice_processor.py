@@ -11,6 +11,7 @@ from llm_manager import llm_call
 import data_normalization_utils as utils
 import pdf_engine
 import vision_engine
+import config
 from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
@@ -40,9 +41,10 @@ class InvoiceProcessor:
             full_text = invoice_text if isinstance(invoice_text, str) else "\n".join(invoice_text)
             
             prompt = f"""
-            Extract following details from the invoice text. Return ONLY a valid JSON object.
-            Keys: "invoice_number", "invoice_date", "gst_number", "vendor_name", "total_amount", "description"
-            Invoice Text: {full_text[:3500]}
+            {config.prompt}
+            
+            Invoice Text Content:
+            {full_text[:4000]}
             """
             
             try:

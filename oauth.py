@@ -1,6 +1,4 @@
-import streamlit as st
 from google_auth_oauthlib.flow import Flow
-import streamlit as st
 import load_files_from_gdrive
 from googleapiclient.discovery import build
 from app_logger import get_logger
@@ -65,19 +63,12 @@ def ensure_google_login(show_ui: bool = True):
             # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
             st.session_state["user_email"] = ""
 
-        # Clean URL
         st.query_params.clear()
         st.rerun()
 
     # -----------------------------
-    # LOAD CREDENTIALS SAFELY
+    # GENERATE AUTH URL
     # -----------------------------
-    def load_credentials():
-        # 1️⃣ Session cache
-        if "creds" in st.session_state:
-            st.success("Welcome! You are logged in.")
-            return st.session_state["creds"]
-        return None
 
     flow = Flow.from_client_config(
         _client_config(),
