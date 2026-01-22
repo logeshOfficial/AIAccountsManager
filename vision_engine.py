@@ -11,11 +11,12 @@ logger = get_logger(__name__)
 
 @st.cache_resource
 def get_hf_pipeline():
-    """Loads and caches the Hugging Face image-to-text pipeline."""
-    # Using BLIP as it's more stable/modern than the older vit-gpt2 for the pipeline API
-    model_id = "Salesforce/blip-image-captioning-base"
-    logger.info(f"📦 Loading Hugging Face Vision Model ({model_id})...")
+    """Loads and caches the Hugging Face OCR pipeline (TrOCR)."""
+    # Using TrOCR which is a dedicated OCR model (reads text instead of just describing)
+    model_id = "microsoft/trocr-base-printed"
+    logger.info(f"📦 Loading Hugging Face OCR Model ({model_id})...")
     try:
+        # Note: TrOCR is used with 'image-to-text' pipeline as well
         return pipeline("image-to-text", model=model_id)
     except Exception as e:
         logger.error(f"Failed to load HF pipeline: {e}")
@@ -102,17 +103,17 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     except Exception as e:
         logger.warning(f"✗ Tier 2 (OpenAI Mini) failed for {file_name}: {e}")
 
-    # --- Tier 3: Hugging Face Local Fallback ---
+    # --- Tier 3: Hugging Face Local Fallback (OCR) ---
     try:
-        logger.info("🔄 Falling back to Tier 3: Hugging Face Local Inference...")
+        logger.info("🔄 Falling back to Tier 3: Hugging Face Local OCR (TrOCR)...")
         pipe = get_hf_pipeline()
         if pipe:
             img = Image.open(io.BytesIO(image_bytes))
             result = pipe(img)
             if result and len(result) > 0:
-                caption = result[0].get('generated_text', '')
-                logger.info(f"✓ Tier 3 (Hugging Face) generated caption: {caption}")
-                return f"Image Caption (Fallback): {caption}"
+                extracted_text = result[0].get('generated_text', '')
+                logger.info(f"✓ Tier 3 (Hugging Face TrOCR) extracted: {extracted_text}")
+                return extracted_text
     except Exception as e:
         logger.error(f"✗ Tier 3 (Hugging Face) failed for {file_name}: {e}")
 
