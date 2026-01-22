@@ -112,34 +112,29 @@ def llm_call(prompt: str) -> Tuple[str, str]:
     gemini_client = get_fallback_client()
     
     if gemini_client:
-        model_name = st.secrets.get("gemini_model", DEFAULT_FALLBACK_MODEL)
-        try:
-            
-            # Use system instruction if available in new SDK
+        # Rotation for Gemini fallback
+        gemini_variants = [
+            st.secrets.get("gemini_model", DEFAULT_FALLBACK_MODEL),
+            "gemini-1.5-flash-latest",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro-latest"
+        ]
+        
+        for model_id in gemini_variants:
             try:
                 response = gemini_client.models.generate_content(
-                    model=model_name,
+                    model=model_id,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction="You are a precise financial invoice assistant."
                     )
                 )
-            except Exception as flash_e:
-                logger.warning(f"Gemini {model_name} failed, trying gemini-1.5-pro: {flash_e}")
-                response = gemini_client.models.generate_content(
-                    model='gemini-1.5-pro',
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction="You are a precise financial invoice assistant."
-                    )
-                )
-            
-            if response.text:
-                logger.info(f"LLM Call successful using Gemini fallback: {model_name}")
-                return response.text.strip(), model_name
-        except Exception as e:
-            logger.error(f"Gemini fallback model also failed: {e}")
-            # st.error(f"Fallback model also failed: {e}")
+                if response.text:
+                    logger.info(f"LLM Call successful using Gemini fallback: {model_id}")
+                    return response.text.strip(), model_id
+            except Exception as e:
+                logger.warning(f"Gemini {model_id} failed: {e}")
+                continue
             
     # --- Failure ---
     if primary_error:

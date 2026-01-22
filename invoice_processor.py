@@ -20,15 +20,17 @@ class InvoiceProcessor:
         self.year_month_data = defaultdict(lambda: defaultdict(list))
         
     def safe_json_load(self, text: str) -> Dict:
-        """Safely parses JSON from LLM response strings."""
+        """Safely parses JSON from LLM response strings, handling both dicts and lists."""
         if not text or not text.strip():
             raise ValueError("LLM returned empty response")
         try:
-            return json.loads(text)
+            data = json.loads(text)
+            return data[0] if isinstance(data, list) and data else data
         except Exception:
             match = re.search(r'\{.*\}', text, re.S)
             if match:
-                return json.loads(match.group())
+                data = json.loads(match.group())
+                return data[0] if isinstance(data, list) and data else data
             raise ValueError("Could not extract valid JSON from LLM response")
 
     def parse_invoices_with_llm(self, invoice_texts: List[str]) -> List[Dict]:

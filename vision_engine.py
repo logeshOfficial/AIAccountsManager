@@ -23,7 +23,7 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
     
     logger.info(f"🔮 Vision Engine: Processing {file_name} (Mime: {mime_type}, Size: {len(image_bytes)} bytes)")
 
-    # --- Tier 1: Gemini Vision ---
+    # --- Tier 1: Gemini Vision (Multi-Model Rotation) ---
     try:
         gemini_key = st.secrets.get("gemini_api_key")
         if gemini_key:
@@ -31,23 +31,27 @@ def extract_text_with_vision(image_bytes: bytes, file_name: str) -> str:
             img = Image.open(io.BytesIO(image_bytes))
             prompt = "Extract all text from this invoice or receipt image. Preserve labels and values. Return the complete text content."
             
-            try:
-                response = client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=[prompt, img]
-                )
-            except Exception as flash_e:
-                logger.warning(f"Tier 1 (Gemini Flash) failed, trying Pro: {flash_e}")
-                response = client.models.generate_content(
-                    model='gemini-1.5-pro',
-                    contents=[prompt, img]
-                )
+            # List of models to try in order of efficiency/reliability
+            gemini_models = [
+                'gemini-1.5-flash', 'gemini-1.5-flash-latest', 
+                'gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'
+            ]
             
-            if response.text:
-                logger.info(f"✓ Tier 1 (Gemini) extracted text from: {file_name}")
-                return response.text
+            for model_id in gemini_models:
+                try:
+                    response = client.models.generate_content(
+                        model=model_id,
+                        contents=[prompt, img]
+                    )
+                    if response.text:
+                        logger.info(f"✓ Tier 1 (Gemini {model_id}) extracted text from: {file_name}")
+                        return response.text
+                except Exception as model_e:
+                    if "404" in str(model_e):
+                        continue # Try next model
+                    logger.warning(f"Tier 1 ({model_id}) failed: {model_e}")
     except Exception as e:
-        logger.warning(f"✗ Tier 1 (Gemini) failed for {file_name}: {e}")
+        logger.warning(f"✗ Tier 1 (Gemini) major failure for {file_name}: {e}")
 
     # --- Tier 2: OpenAI Vision ---
     openai_key = st.secrets.get("openai_api_key")
