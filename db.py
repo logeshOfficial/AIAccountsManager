@@ -1,212 +1,142 @@
-import sqlite3
+import streamlit as st
+from supabase import create_client, Client
 import json 
 import pandas as pd
-import os
-from typing import Tuple
+from typing import Tuple, Optional
 from app_logger import get_logger
 
 logger = get_logger(__name__)
 
-DB_PATH = "/mount/src/invoices.db"
-
-
-def get_connection():
-    try:
-        return sqlite3.connect(DB_PATH, check_same_thread=False)
-    except Exception as e:
-        logger.error(f"Error while get_connection: {e}")
-        raise Exception("Error while get_connection: ", e)
+@st.cache_resource
+def get_supabase_client() -> Optional[Client]:
+    """Initializes and returns the Supabase client."""
+    url = st.secrets.get("supabase_url")
+    key = st.secrets.get("supabase_key")
     
+    if not url or not key:
+        return None
+        
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase client: {e}")
+        return None
+
 def init_db():
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            file_id TEXT,
-            file_name TEXT,
-            invoice_number TEXT,
-            invoice_date TEXT,
-            gst_number TEXT,
-            vendor_name TEXT,
-            description TEXT,
-            total_amount REAL,
-            raw_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-
-        # Lightweight migration: if DB already existed without user_id, add it.
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(invoices)").fetchall()]
-        if "user_id" not in cols:
-            cur.execute("ALTER TABLE invoices ADD COLUMN user_id TEXT")
-            
-        if "extraction_method" not in cols:
-            cur.execute("ALTER TABLE invoices ADD COLUMN extraction_method TEXT")
-
-        # Index for per-user queries
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)")
-
-        conn.commit()
-    
-    except Exception as e:
-        raise Exception("Error while init_db: ", e)
-
-    finally:
-        conn.close()
+    """
+    Supabase handles table creation via the dashboard or SQL editor.
+    This function remains as a placeholder or for remote table validation.
+    """
+    pass
 
 def check_invoice_exists(file_id: str) -> bool:
-    """Checks if an invoice with the given file_id already exists."""
-    init_db()
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT 1 FROM invoices WHERE file_id = ?", (file_id,))
-        exists = cur.fetchone() is not None
-        return exists
-    except Exception as e:
-        logger.error(f"Error checking invoice existence: {e}")
+    """Checks if an invoice with the given file_id already exists in Supabase."""
+    client = get_supabase_client()
+    if not client:
         return False
-    finally:
-        if 'conn' in locals():
-            conn.close()
         
+    try:
+        response = client.table("invoices").select("file_id").eq("file_id", file_id).execute()
+        return len(response.data) > 0
+    except Exception as e:
+        logger.error(f"Error checking invoice existence in Supabase: {e}")
+        return False
+
 def insert_invoice(invoice, user_id: str):
-    init_db()
-    
+    """Inserts a new invoice record into Supabase."""
+    client = get_supabase_client()
+    if not client:
+        logger.error("Supabase client not initialized. Cannot insert invoice.")
+        return
+
     # 1. Check for duplicates
     if check_invoice_exists(invoice["_file"]["id"]):
         logger.info(f"Skipping duplicate invoice: {invoice['_file']['name']} (ID: {invoice['_file']['id']})")
         return
 
     try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        cur.execute("""
-        INSERT INTO invoices (
-            user_id,
-            file_id,
-            file_name,
-            invoice_number,
-            invoice_date,
-            gst_number,
-            vendor_name,
-            description,
-            total_amount,
-            raw_text,
-            extraction_method
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            invoice["_file"]["id"],
-            invoice["_file"]["name"],
-            invoice.get("invoice_number"),
-            invoice.get("invoice_date"),
-            invoice.get("gst_number"),
-            invoice.get("vendor_name"),
-            invoice.get("description"),
-            invoice.get("total_amount", 0),
-            json.dumps(invoice.get("raw_text", "")),
-            invoice.get("extraction_method", "Unknown")
-        ))
-
-        conn.commit()
+        data = {
+            "user_id": user_id,
+            "file_id": invoice["_file"]["id"],
+            "file_name": invoice["_file"]["name"],
+            "invoice_number": invoice.get("invoice_number"),
+            "invoice_date": invoice.get("invoice_date"),
+            "gst_number": invoice.get("gst_number"),
+            "vendor_name": invoice.get("vendor_name"),
+            "description": invoice.get("description"),
+            "total_amount": float(invoice.get("total_amount", 0) or 0),
+            "raw_text": invoice.get("raw_text", ""),
+            "extraction_method": invoice.get("extraction_method", "Unknown")
+        }
+        
+        client.table("invoices").insert(data).execute()
+        logger.info(f"Successfully inserted invoice to Supabase: {invoice['_file']['name']}")
         
     except Exception as e:
-        raise Exception("Error while insert_invoice: ",e)
-    
-    finally:
-        conn.close()
-    
-def read_db(user_id: str | None = None, is_admin: bool = False):
-    init_db()
-    
-    try:
-        conn = get_connection()
+        logger.error(f"Error while insert_invoice to Supabase: {e}")
+        raise Exception(f"Error while insert_invoice to Supabase: {e}")
 
+def read_db(user_id: str | None = None, is_admin: bool = False):
+    """Reads invoice data from Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return pd.DataFrame([])
+
+    try:
+        query = client.table("invoices").select("*")
+        
         if is_admin:
-            df = pd.read_sql("SELECT * FROM invoices ORDER BY created_at DESC", conn)
+            # Admins see everything
+            response = query.order("created_at", desc=True).execute()
         else:
             if not user_id:
-                df = pd.DataFrame([])
-            else:
-                df = pd.read_sql(
-                    "SELECT * FROM invoices WHERE user_id = ? ORDER BY created_at DESC",
-                    conn,
-                    params=(user_id,),
-                )
-        
-        conn.close()
+                return pd.DataFrame([])
+            # Filter by user_id
+            response = query.eq("user_id", user_id).order("created_at", desc=True).execute()
+            
+        return pd.DataFrame(response.data)
 
     except Exception as e:
-        raise Exception("Error while read_db: ",e)
-    
-    finally:
-        return df 
+        logger.error(f"Error while read_db from Supabase: {e}")
+        return pd.DataFrame([])
 
 def delete_user_data(user_id: str) -> Tuple[bool, str]:
-    """
-    Deletes all invoices associated with a specific user_id.
-    """
-    init_db()
+    """Deletes all invoices associated with a specific user_id in Supabase."""
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase client not initialized."
+
     try:
-        conn = get_connection()
-        cur = conn.cursor()
-        
-        # Check count before deleting
-        cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id = ?", (user_id,))
-        count = cur.fetchone()[0]
+        # Check count first
+        response_count = client.table("invoices").select("file_id", count="exact").eq("user_id", user_id).execute()
+        count = response_count.count
         
         if count == 0:
-            logger.info(f"User {user_id} attempted delete, but no records found.")
             return True, "No records found to delete."
             
-        cur.execute("DELETE FROM invoices WHERE user_id = ?", (user_id,))
-        conn.commit()
-        conn.close()
+        client.table("invoices").delete().eq("user_id", user_id).execute()
         
-        logger.info(f"User {user_id} deleted their data ({count} records).")
+        logger.info(f"User {user_id} deleted their data ({count} records) from Supabase.")
         return True, f"Successfully deleted {count} records."
         
     except Exception as e:
-        logger.error(f"Failed to delete data for user {user_id}: {e}")
+        logger.error(f"Failed to delete Supabase data for user {user_id}: {e}")
         return False, f"Error deleting data: {e}" 
 
 def drop_invoices_db(recreate: bool = True) -> Tuple[bool, str]:
     """
-    Deletes the invoices sqlite database file at DB_PATH.
-
-    Args:
-        recreate: If True, re-create the DB file and invoices table after deletion.
-
-    Returns:
-        (success, message)
+    Drops all records from the invoices table in Supabase.
+    (Postgres tables aren't usually 'dropped' dynamically in a production app).
     """
-    # Best-effort close of any open connections happens at call sites; here we just try to delete.
-    # Best-effort close of any open connections happens at call sites; here we just try to delete.
+    client = get_supabase_client()
+    if not client:
+        return False, "Supabase client not initialized."
+
     try:
-        user_param = "Admin" # distinct from regular user delete
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-            logger.warning(f"Database dropped by {user_param}")
-        else:
-            # Treat "doesn't exist" as success for idempotency
-            if recreate:
-                init_db()
-            logger.info(f"Drop DB requested, but DB not found. Schema recreated: {recreate}")
-            return True, f"DB not found at {DB_PATH}. Recreated schema." if recreate else f"DB not found at {DB_PATH}."
-
-        if recreate:
-            init_db()
-            return True, f"Deleted and recreated DB at {DB_PATH}."
-
-        return True, f"Deleted DB at {DB_PATH}."
-    except PermissionError as e:
-        return False, f"Permission error deleting DB at {DB_PATH}. Is it open elsewhere? ({e})"
+        # Delete all rows
+        client.table("invoices").delete().neq("file_id", "force_all_delete").execute()
+        logger.warning("Database cleared (all records deleted) in Supabase.")
+        return True, "Successfully cleared all records from Supabase."
     except Exception as e:
-        return False, f"Failed to delete DB at {DB_PATH}: {e}"
+        logger.error(f"Failed to clear Supabase table: {e}")
+        return False, f"Failed to clear database: {e}"

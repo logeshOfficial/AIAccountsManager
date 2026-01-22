@@ -16,4 +16,5 @@ openai
 pillow
 pytesseract
 groq
+supabase
 

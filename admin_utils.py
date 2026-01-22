@@ -1,26 +1,23 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import os
-
-DB_LOG_PATH = "log.db"
+from db import get_supabase_client
 
 def show_log_viewer():
     """
-    Displays the contents of log.db in a structured dataframe.
+    Displays the contents of the 'logs' table from Supabase in a structured dataframe.
     """
-    st.markdown("### 📜 Application Logs (SQLite)")
+    st.markdown("### 📜 Application Logs (Supabase)")
     
-    if not os.path.exists(DB_LOG_PATH):
-        st.warning("No log database found yet.")
+    client = get_supabase_client()
+    if not client:
+        st.error("Supabase client not initialized. Check your secrets.")
         return
 
     try:
-        conn = sqlite3.connect(DB_LOG_PATH, check_same_thread=False)
-        
-        # Query logs
-        df = pd.read_sql_query("SELECT id, timestamp, user_id, level, name, message FROM logs ORDER BY id DESC LIMIT 500", conn)
-        conn.close()
+        # Query logs from Supabase
+        response = client.table("logs").select("*").order("id", desc=True).limit(500).execute()
+        df = pd.DataFrame(response.data)
         
         if not df.empty:
             # Filters
@@ -40,17 +37,14 @@ def show_log_viewer():
             st.markdown("---")
             if st.button("🗑️ Clear All Logs"):
                 try:
-                    conn = sqlite3.connect(DB_LOG_PATH, check_same_thread=False)
-                    cur = conn.cursor()
-                    cur.execute("DELETE FROM logs")
-                    conn.commit()
-                    conn.close()
-                    st.success("Logs cleared successfully.")
+                    # Delete all records from logs table
+                    client.table("logs").delete().neq("id", -1).execute()
+                    st.success("Logs cleared successfully from Supabase.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Failed to clear logs: {e}")
+                    st.error(f"Failed to clear logs from Supabase: {e}")
         else:
-            st.info("Log database is empty.")
+            st.info("Log database in Supabase is empty.")
             
     except Exception as e:
-        st.error(f"Error reading log database: {e}")
+        st.error(f"Error reading logs from Supabase: {e}")
