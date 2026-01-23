@@ -19,3 +19,11 @@ supabase
 transformers
 torch
 sentencepiece
+langgraph
+langchain
+langchain-openai
+langchain-google-genai
+langchain-groq
+plotly
+tabulate
+yagmail
