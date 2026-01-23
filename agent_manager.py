@@ -49,14 +49,21 @@ def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str):
         logger.error(f"Chart tool failed: {e}")
         return None
 
-def generate_excel_tool(data: pd.DataFrame, filename: str, target_year: str = None):
+def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None):
     """
     Generates an Excel report. 
-    If target_year is provided, it creates multiple sheets named by month.
+    Smart Sheet Logic:
+    - Multi-sheet: If target_year is provided and NO target_month/target_day is provided.
+    - Single-sheet: Otherwise.
     """
     filepath = os.path.join(os.getcwd(), filename)
+    filters = filters or {}
+    target_year = filters.get("target_year")
+    target_month = filters.get("target_month")
+    target_day = filters.get("target_day")
     
-    if target_year and not data.empty:
+    # Multi-sheet logic: Year requested but no specific month/day focusing
+    if target_year and not target_month and not target_day and not data.empty:
         # 1. Ensure 'invoice_date' is datetime
         data = data.copy()
         data['invoice_date'] = pd.to_datetime(data['invoice_date'], errors='coerce')
@@ -78,11 +85,10 @@ def generate_excel_tool(data: pd.DataFrame, filename: str, target_year: str = No
                         display_df['invoice_date'] = display_df['invoice_date'].dt.strftime('%Y-%m-%d')
                         display_df.to_excel(writer, sheet_name=month_name, index=False)
                 
-                # Check if writer has any sheets before returning
                 if writer.sheets:
                     return filepath
 
-    # Default single sheet behavior
+    # Default single sheet behavior (Month, Day, or just Vendor)
     data.to_excel(filepath, index=False)
     return filepath
 
@@ -135,12 +141,21 @@ def analyst_node(state: AgentState):
     - vendor_name: (partial or exact)
     - invoice_number: (string)
     - target_year: (4-digit year like '2025')
+    - target_month: (month name or number 1-12)
+    - target_day: (day of the month 1-31)
     - target_email: (email address to send reports to)
     
     Respond strictly in JSON:
     {{
       "next_node": "node_name",
-      "filters": {{"vendor_name": null, "invoice_number": null, "target_year": null, "target_email": null}}
+      "filters": {{
+        "vendor_name": null, 
+        "invoice_number": null, 
+        "target_year": null, 
+        "target_month": null, 
+        "target_day": null, 
+        "target_email": null
+      }}
     }}"""
     
     try:
@@ -155,9 +170,31 @@ def analyst_node(state: AgentState):
             df = df[df['vendor_name'].str.contains(filters['vendor_name'], case=False, na=False)]
         if filters.get("invoice_number"):
             df = df[df['invoice_number'].astype(str).str.contains(str(filters['invoice_number']))]
-        if filters.get("target_year"):
+            
+        if not df.empty and (filters.get("target_year") or filters.get("target_month") or filters.get("target_day")):
             df['temp_date'] = pd.to_datetime(df['invoice_date'], errors='coerce')
-            df = df[df['temp_date'].dt.year.astype(str) == str(filters['target_year'])]
+            if filters.get("target_year"):
+                df = df[df['temp_date'].dt.year.astype(str) == str(filters['target_year'])]
+            if filters.get("target_month"):
+                month = filters["target_month"]
+                if isinstance(month, str) and not month.isdigit():
+                    # Handle month names
+                    try:
+                        month_num = datetime.strptime(month, "%B").month
+                    except:
+                        try:
+                            month_num = datetime.strptime(month, "%b").month
+                        except:
+                            month_num = None
+                else:
+                    month_num = int(month)
+                
+                if month_num:
+                    df = df[df['temp_date'].dt.month == month_num]
+                    
+            if filters.get("target_day"):
+                df = df[df['temp_date'].dt.day == int(filters['target_day'])]
+            
             df = df.drop(columns=['temp_date'])
             
     except Exception as e:
@@ -167,8 +204,10 @@ def analyst_node(state: AgentState):
 
     if not df.empty:
         summary = f"I found {len(df)} matching records. "
-        if filters.get('target_year'):
+        if filters.get('target_year') and not (filters.get('target_month') or filters.get('target_day')):
             summary += f"Processing yearly overview for {filters['target_year']} (multi-sheet by month)."
+        elif filters.get('target_month'):
+            summary += f"Filtered for {filters['target_month']} {filters.get('target_year', '')}."
         elif filters.get('invoice_number') or len(df) == 1:
             inv = df.iloc[0]
             summary += f"Details: Invoice #{inv['invoice_number']} from {inv['vendor_name']} ({inv['invoice_date']}) for ${inv['total_amount']:.2f}."
@@ -214,19 +253,23 @@ def secretary_node(state: AgentState):
     user_query = state["messages"][0].content
     filters = state.get("extracted_filters", {})
     dest_email = filters.get("target_email") or state["user_email"]
-    target_year = filters.get("target_year")
     
     msg = ""
     file_path = None
     
     if any(k in user_query.lower() for k in ["excel", "report", "download"]):
-        suffix = filters.get("target_year") or filters.get("vendor_name") or "Report"
-        file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", target_year=target_year)
-        msg += f"Excel report generated successfully (multi-sheet by month for {target_year}) " if target_year else "Excel report generated. "
+        # Build a descriptive suffix
+        time_parts = [str(filters.get(k)) for k in ["target_day", "target_month", "target_year"] if filters.get(k)]
+        suffix = "_".join(time_parts) or filters.get("vendor_name") or "Report"
+        
+        file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
+        
+        is_multi = filters.get("target_year") and not (filters.get("target_month") or filters.get("target_day"))
+        msg += f"Excel report generated (multi-sheet by month for {filters['target_year']}). " if is_multi else "Excel report generated. "
         
     if "email" in user_query.lower():
         subject = f"Financial Report: {filters.get('target_year', filters.get('vendor_name', 'Export'))}"
-        body = f"Attached is the requested financial analysis for {dest_email}."
+        body = f"Attached is the requested financial analysis."
         success = send_email_tool(dest_email, subject, body, file_path)
         msg += f"Email sent to {dest_email}." if success else "Email delivery failed."
         
