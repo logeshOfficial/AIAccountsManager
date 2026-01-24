@@ -43,24 +43,24 @@ def run_chat_interface():
         st.session_state.messages = []
         
     # 3. Display Chat History
-    for message in st.session_state.messages:
+    for i, message in enumerate(st.session_state.messages):
         label = "user" if message.type == "human" else "assistant"
         with st.chat_message(label):
             st.markdown(message.content)
             # If the stored message has additional metadata (like a chart), display it
             if hasattr(message, "additional_kwargs"):
                 chart = message.additional_kwargs.get("chart")
-                if chart: st.plotly_chart(chart, use_container_width=True)
+                if chart: st.plotly_chart(chart, use_container_width=True, key=f"hist_chart_{i}")
                 file = message.additional_kwargs.get("file")
                 if file and os.path.exists(file):
                     label = "📥 Download Excel" if file.endswith(".xlsx") else "📥 Download Chart"
                     with open(file, "rb") as f:
-                        st.download_button(label=label, data=f, file_name=os.path.basename(file), key=f"dl_{file}")
+                        st.download_button(label=label, data=f, file_name=os.path.basename(file), key=f"hist_dl_{i}_{os.path.basename(file)}")
                 
                 chart_file = message.additional_kwargs.get("chart_file")
                 if chart_file and os.path.exists(chart_file):
                     with open(chart_file, "rb") as f:
-                        st.download_button(label="📥 Download Interactive Chart", data=f, file_name=os.path.basename(chart_file), key=f"dl_{chart_file}")
+                        st.download_button(label="📥 Download Interactive Chart", data=f, file_name=os.path.basename(chart_file), key=f"hist_dl_chart_{i}_{os.path.basename(chart_file)}")
 
     # 4. Chat Input
     if query := st.chat_input("What would you like to know?"):
@@ -79,7 +79,7 @@ def run_chat_interface():
             # The agent returns the full updated message list. We want the NEW AIMessage.
             new_msgs = [m for m in result["messages"] if isinstance(m, AIMessage) and m not in st.session_state.messages]
             
-            for ai_msg in new_msgs:
+            for i, ai_msg in enumerate(new_msgs):
                 with st.chat_message("assistant"):
                     st.markdown(ai_msg.content)
                     
@@ -89,7 +89,7 @@ def run_chat_interface():
                     # --- 📊 B. Display Generated Chart ---
                     chart_data = result.get("generated_chart")
                     if chart_data:
-                        st.plotly_chart(chart_data, use_container_width=True)
+                        st.plotly_chart(chart_data, use_container_width=True, key=f"new_chart_{i}_{datetime.now().timestamp()}")
                         ai_msg.additional_kwargs["chart"] = chart_data
                     
                     # --- 💾 C. Provide Download Link ---
@@ -100,7 +100,8 @@ def run_chat_interface():
                                 label="📥 Download Excel Report",
                                 data=f,
                                 file_name=os.path.basename(file_path),
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key=f"new_dl_{i}_{os.path.basename(file_path)}"
                             )
                         ai_msg.additional_kwargs["file"] = file_path
                     
@@ -112,7 +113,8 @@ def run_chat_interface():
                                 label="📥 Download Interactive Chart",
                                 data=f,
                                 file_name=os.path.basename(chart_file),
-                                mime="text/html"
+                                mime="text/html",
+                                key=f"new_dl_chart_{i}_{os.path.basename(chart_file)}"
                             )
                         ai_msg.additional_kwargs["chart_file"] = chart_file
                 
