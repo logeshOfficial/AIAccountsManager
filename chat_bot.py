@@ -126,7 +126,9 @@ def run_chat_interface():
             for i, ai_msg in enumerate(new_msgs):
                 with st.chat_message("assistant"):
                     st.markdown(ai_msg.content)
-                    ai_msg.additional_kwargs = {}
+                    ai_msg.additional_kwargs = {
+                        "filters": result.get("extracted_filters", {})
+                    }
                     
                     # --- 📊 B. Display Generated Chart ---
                     chart_data = result.get("generated_chart")

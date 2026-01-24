@@ -153,22 +153,28 @@ def analyst_node(state: AgentState):
     # Provide the last few messages for context in the prompt
     history_context = "\n".join([f"{'User' if msg.type=='human' else 'Assistant'}: {msg.content}" for msg in state["messages"][:-1]])
     
+    # Provide current filters as context
+    current_filters = state.get("extracted_filters", {})
+    
     prompt = f"""You are a Financial Analyst. 
     Conversational Context:
     {history_context}
     
+    Current Active Filters: {json.dumps(current_filters) if current_filters else 'None'}
+    
     Latest User Query: '{user_query}'
     
     TASK:
-    1. Analyze the latest query considering the context above.
+    1. Analyze the latest query considering the context above and the current active filters.
     2. If the user refers to "them", "that", "these", or asks for modifications to a previous search, resolve the references.
     3. IMPORTANT: If the query is a continuation (e.g., "Now graph them", "Filter by 2024", "Email this", "Send me the chart"), you MUST CARRY OVER relevant filters (vendor_name, invoice_number, etc.) from previous turns unless the user explicitly changes them.
-    4. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'END'.
+    4. If the user asks to "reset" or "clear" filters, set all filter values to null.
+    5. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'END'.
     Data available for vendors like: {df['vendor_name'].unique().tolist() if not df.empty else 'None'}
     
-    Extract Search Filters if mentioned:
+    Extract or Update Search Filters:
     - vendor_name: (partial or exact)
-    - invoice_number: (alphanumeric identifier, strip labels like "Invoice #" or "No:")
+    - invoice_number: (alphanumeric identifier)
     - target_year: (4-digit year like '2025')
     - target_month: (month name or number 1-12)
     - target_day: (day of the month 1-31)
@@ -178,12 +184,12 @@ def analyst_node(state: AgentState):
     {{
       "next_node": "node_name",
       "filters": {{
-        "vendor_name": null, 
-        "invoice_number": null, 
-        "target_year": null, 
-        "target_month": null, 
-        "target_day": null, 
-        "target_email": null
+        "vendor_name": "value or previous", 
+        "invoice_number": "value or previous", 
+        "target_year": "value or previous", 
+        "target_month": "value or previous", 
+        "target_day": "value or previous", 
+        "target_email": "value or previous"
       }}
     }}"""
     
@@ -319,13 +325,17 @@ def secretary_node(state: AgentState):
         suffix = "_".join(time_parts) or filters.get("vendor_name") or "Report"
         file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
         attachments.append(file_path)
-        is_multi = filters.get("target_year") and not (filters.get("target_month") or filters.get("target_day"))
         msg += f"Excel report generated. "
+    elif state.get("generated_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
+        # Reuse existing Excel if user asks to email it
+        attachments.append(state["generated_file"])
+        msg += "Excel report included in email. "
         
     # Check for Graph/Email chart request
-    if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]) and any(k in user_query.lower() for k in ["graph", "chart", "visual"]):
-        attachments.append(state["generated_chart_file"])
-        msg += "Graph included in email. "
+    if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
+        if any(k in user_query.lower() for k in ["graph", "chart", "visual", "it"]):
+            attachments.append(state["generated_chart_file"])
+            msg += "Graph included in email. "
 
     if "email" in user_query.lower() or "send" in user_query.lower():
         subject = f"Financial Analysis Request"
@@ -357,9 +367,27 @@ def get_agent_graph():
 
 def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = None):
     history = history or []
+    
+    # --- 🔄 Restore Context from History ---
+    last_filters = {}
+    last_chart_file = None
+    last_excel_file = None
+    
+    for msg in reversed(history):
+        if isinstance(msg, AIMessage) and hasattr(msg, "additional_kwargs"):
+            if not last_filters:
+                last_filters = msg.additional_kwargs.get("filters", {})
+            if not last_chart_file:
+                last_chart_file = msg.additional_kwargs.get("chart_file")
+            if not last_excel_file:
+                last_excel_file = msg.additional_kwargs.get("file")
+                
     app = get_agent_graph()
     inputs = {
         "messages": history + [HumanMessage(content=user_query)], 
-        "user_email": user_email
+        "user_email": user_email,
+        "extracted_filters": last_filters,
+        "generated_chart_file": last_chart_file,
+        "generated_file": last_excel_file
     }
     return app.invoke(inputs)
