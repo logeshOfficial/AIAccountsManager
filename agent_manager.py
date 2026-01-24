@@ -34,16 +34,23 @@ class AgentState(TypedDict):
 # 2. Tool Implementations
 # ==============================================================================
 
-def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str):
+def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str = None, y: str = "total_amount"):
     """Generates a Plotly chart based on the data."""
     try:
+        # Default X to 'month' if it exists, else the first column
+        if not x:
+            x = "month" if "month" in data.columns else data.columns[0]
+        
+        # Determine available hover columns
+        hover_cols = [c for c in ["vendor_name", "description"] if c in data.columns]
+        
         if chart_type == "bar":
-            fig = px.bar(data, x=data.columns[0], y="total_amount", title=title)
+            fig = px.bar(data, x=x, y=y, title=title, hover_data=hover_cols)
         elif chart_type == "pie":
-            fig = px.pie(data, values="total_amount", names=data.columns[0], title=title)
+            fig = px.pie(data, values=y, names=x, title=title, hover_data=hover_cols)
         elif chart_type == "line" or chart_type == "sensex":
             # "sensex" graph is a line chart with markers
-            fig = px.line(data, x=data.columns[0], y="total_amount", title=title, markers=True)
+            fig = px.line(data, x=x, y=y, title=title, markers=True, hover_data=hover_cols)
             if chart_type == "sensex":
                 fig.update_traces(line=dict(width=3, color='royalblue'), marker=dict(size=10, symbol='diamond'))
         else:
@@ -258,25 +265,37 @@ def designer_node(state: AgentState):
     llm = get_llm()
     prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line', 'sensex') is best for {len(df)} rows? "
     prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '
-    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | none"}'
+    prompt += 'Identify if they specified X or Y axis columns. '
+    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
         response = llm.invoke(prompt)
         cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
         chart_type = cfg.get("chart_type", "bar")
         aggregate_by = cfg.get("aggregate_by", "none")
+        x_axis = cfg.get("x_axis")
+        y_axis = cfg.get("y_axis", "total_amount")
         title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
         if aggregate_by == "month":
             df = df.copy()
             df['month'] = pd.to_datetime(df['invoice_date']).dt.strftime('%Y-%m')
-            df = df.groupby('month')['total_amount'].sum().reset_index().sort_values('month')
+            
+            # Aggregation logic to preserve hover data
+            agg_dict = {y_axis: 'sum' if y_axis in df.columns else 'count'}
+            if 'vendor_name' in df.columns: 
+                agg_dict['vendor_name'] = lambda x: ', '.join(pd.Series(x).unique())
+            if 'description' in df.columns: 
+                agg_dict['description'] = lambda x: '; '.join(pd.Series(x).dropna().unique()[:3])
+            
+            df = df.groupby('month').agg(agg_dict).reset_index().sort_values('month')
+            x_axis = "month"
             
     except Exception as e:
         logger.warning(f"Designer failed to select chart: {e}")
-        chart_type, title = "bar", "Expense Analysis"
+        chart_type, title, x_axis, y_axis = "bar", "Expense Analysis", None, "total_amount"
 
-    chart_json, chart_file = generate_chart_tool(df, chart_type, title)
+    chart_json, chart_file = generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
     return {
         "generated_chart": json.loads(chart_json) if chart_json else None, 
         "generated_chart_file": chart_file,
