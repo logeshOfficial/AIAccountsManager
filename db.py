@@ -143,3 +143,77 @@ def drop_invoices_db(recreate: bool = True) -> Tuple[bool, str]:
     except Exception as e:
         logger.error(f"Failed to clear Supabase table: {e}")
         return False, f"Failed to clear database: {e}"
+
+# ==============================================================================
+# CHAT PERSISTENCE FUNCTIONS
+# ==============================================================================
+
+def create_chat_session(user_id: str, title: str = "New Chat") -> Optional[str]:
+    """Creates a new chat session and returns its ID."""
+    client = get_supabase_client()
+    if not client: return None
+    try:
+        data = {"user_id": user_id, "title": title}
+        response = client.table("chat_sessions").insert(data).execute()
+        return response.data[0]["id"] if response.data else None
+    except Exception as e:
+        logger.error(f"Error creating chat session: {e}")
+        return None
+
+def get_user_chat_sessions(user_id: str):
+    """Retrieves all chat sessions for a user."""
+    client = get_supabase_client()
+    if not client: return []
+    try:
+        response = client.table("chat_sessions").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error getting chat sessions: {e}")
+        return []
+
+def save_chat_message(session_id: str, role: str, content: str, additional_kwargs: dict = None):
+    """Saves a chat message to a session."""
+    client = get_supabase_client()
+    if not client: return
+    try:
+        data = {
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "additional_kwargs": additional_kwargs or {}
+        }
+        client.table("chat_messages").insert(data).execute()
+        
+        # Update session title if it's the first human message
+        if role == "human":
+            sessions = client.table("chat_sessions").select("title").eq("id", session_id).execute()
+            if sessions.data and sessions.data[0]["title"] == "New Chat":
+                new_title = (content[:50] + '...') if len(content) > 50 else content
+                client.table("chat_sessions").update({"title": new_title}).eq("id", session_id).execute()
+                
+    except Exception as e:
+        logger.error(f"Error saving chat message: {e}")
+
+def get_chat_messages(session_id: str):
+    """Retrieves all messages for a session."""
+    client = get_supabase_client()
+    if not client: return []
+    try:
+        response = client.table("chat_messages").select("*").eq("session_id", session_id).order("timestamp", desc=False).execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error getting chat messages: {e}")
+        return []
+
+def delete_chat_session(session_id: str):
+    """Deletes a chat session and its messages."""
+    client = get_supabase_client()
+    if not client: return False
+    try:
+        # Cascade delete should be handled by DB, but we do it explicitly just in case
+        client.table("chat_messages").delete().eq("session_id", session_id).execute()
+        client.table("chat_sessions").delete().eq("id", session_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting chat session: {e}")
+        return False

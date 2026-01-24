@@ -8,6 +8,7 @@ import invoice_manager
 from langchain_core.messages import AIMessage, HumanMessage
 import agent_manager
 import os
+import db
 from app_logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +31,7 @@ def ensure_user_login():
     return user_email
 
 def run_chat_interface():
-    """Main entry point for the Chat Bot view with Conversational Memory."""
+    """Main entry point for the Chat Bot view with Conversational Memory and Persistence."""
     
     st.title("🤖 AI Invoice Assistant")
     st.caption("Ask questions, generate charts, or request Excel reports. I remember our conversation!")
@@ -38,11 +39,54 @@ def run_chat_interface():
     # 1. Login Check
     user_email = ensure_user_login()
     
-    # 2. Initialize Session State for Chat History
+    # 2. Session Management in Sidebar
+    with st.sidebar:
+        st.header("💬 Chat Sessions")
+        if st.button("➕ New Chat", use_container_width=True):
+            st.session_state.current_session_id = db.create_chat_session(user_email)
+            st.session_state.messages = []
+            st.rerun()
+            
+        sessions = db.get_user_chat_sessions(user_email)
+        if sessions:
+            st.write("---")
+            for session in sessions:
+                col1, col2 = st.columns([0.8, 0.2])
+                with col1:
+                    if st.button(f"📄 {session['title']}", key=f"sess_{session['id']}", use_container_width=True):
+                        st.session_state.current_session_id = session['id']
+                        # Load messages from DB
+                        db_msgs = db.get_chat_messages(session['id'])
+                        st.session_state.messages = [
+                            HumanMessage(content=m['content'], additional_kwargs=m['additional_kwargs']) if m['role'] == 'human'
+                            else AIMessage(content=m['content'], additional_kwargs=m['additional_kwargs'])
+                            for m in db_msgs
+                        ]
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️", key=f"del_{session['id']}"):
+                        if db.delete_chat_session(session['id']):
+                            if st.session_state.get("current_session_id") == session['id']:
+                                st.session_state.current_session_id = None
+                                st.session_state.messages = []
+                            st.rerun()
+
+    # 3. Initialize Session State
+    if "current_session_id" not in st.session_state:
+        st.session_state.current_session_id = None
     if "messages" not in st.session_state:
         st.session_state.messages = []
         
-    # 3. Display Chat History
+    # If no session selected, show prompt
+    if not st.session_state.current_session_id:
+        st.info("👋 Select an existing chat or start a new one to begin.")
+        if st.button("🚀 Start New Chat Now"):
+            st.session_state.current_session_id = db.create_chat_session(user_email)
+            st.session_state.messages = []
+            st.rerun()
+        return
+
+    # 4. Display Chat History
     for i, message in enumerate(st.session_state.messages):
         label = "user" if message.type == "human" else "assistant"
         with st.chat_message(label):
@@ -62,28 +106,26 @@ def run_chat_interface():
                     with open(chart_file, "rb") as f:
                         st.download_button(label="📥 Download Interactive Chart", data=f, file_name=os.path.basename(chart_file), key=f"hist_dl_chart_{i}_{os.path.basename(chart_file)}")
 
-    # 4. Chat Input
+    # 5. Chat Input
     if query := st.chat_input("What would you like to know?"):
         # Display User Message
         with st.chat_message("user"):
             st.markdown(query)
         
-        # Add to history
+        # Save and add to history
+        db.save_chat_message(st.session_state.current_session_id, "human", query)
         st.session_state.messages.append(HumanMessage(content=query))
         
-        # 5. Run Agent
+        # 6. Run Agent
         with st.spinner("🤖 Agent is thinking..."):
             result = agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1])
             
             # --- 🤖 A. Display Assistant Response ---
-            # The agent returns the full updated message list. We want the NEW AIMessage.
             new_msgs = [m for m in result["messages"] if isinstance(m, AIMessage) and m not in st.session_state.messages]
             
             for i, ai_msg in enumerate(new_msgs):
                 with st.chat_message("assistant"):
                     st.markdown(ai_msg.content)
-                    
-                    # Store chart/file in message metadata for persistence
                     ai_msg.additional_kwargs = {}
                     
                     # --- 📊 B. Display Generated Chart ---
@@ -118,9 +160,11 @@ def run_chat_interface():
                             )
                         ai_msg.additional_kwargs["chart_file"] = chart_file
                 
+                # Save and add to history
+                db.save_chat_message(st.session_state.current_session_id, "ai", ai_msg.content, ai_msg.additional_kwargs)
                 st.session_state.messages.append(ai_msg)
 
-            # --- 🔍 D. Source Data Expander ---
+            # --- 🔍 E. Source Data Expander ---
             df = result.get("invoices_df")
             if df is not None and not df.empty:
                 with st.expander(f"View {len(df)} Matched Records"):
