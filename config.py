@@ -3,7 +3,7 @@ You are given a list of invoice texts. Each entry is the full text from one invo
 
 Each invoice should be converted into one or more dictionaries with these keys:
 
-- invoice_number (If "Invoice Number" is not found, you may use alternative terms such as "Challan Number", "Bill Number", "Invoice #", "Invoice No", "Do No", etc. Treat these as invoice_no.)
+- invoice_number (Extract ONLY the alphanumeric identifier. DO NOT include labels like "Invoice No:", "No:", "Bill #", etc. Example: If the text says "Invoice No: ABC-123", return "ABC-123".)
 - invoice_date (formatted as "MMM DD YYYY", e.g., "Dec 20 2012")
 - gst_number (if present, else empty string)
 - vendor_name (if found, else empty)

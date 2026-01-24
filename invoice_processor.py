@@ -113,6 +113,7 @@ class InvoiceProcessor:
 
             # Final normalization before appending
             data["invoice_date"] = utils.normalize_date(data.get("invoice_date", ""))
+            data["invoice_number"] = utils.clean_invoice_number(data.get("invoice_number", ""))
             parsed_invoices.append(data)
             logger.info(f"✓ Processing doc {i+1} complete. Method: {data.get('extraction_method')}")
                 

@@ -30,52 +30,78 @@ def ensure_user_login():
     return user_email
 
 def run_chat_interface():
-    """Main entry point for the Chat Bot view."""
+    """Main entry point for the Chat Bot view with Conversational Memory."""
     
-    st.title("📊 AI Invoice Assistant (Agentic)")
-    st.caption("Ask questions, generate charts, or request Excel reports.")
+    st.title("🤖 AI Invoice Assistant")
+    st.caption("Ask questions, generate charts, or request Excel reports. I remember our conversation!")
     
     # 1. Login Check
     user_email = ensure_user_login()
     
-    # 2. Query Input
-    query = st.text_input("Message", placeholder="E.g., 'Show me a graph of my expenses and email me a report.'")
-    
-    if st.button("Send", type="primary") and query:
-        logger.info(f"User Interrogation: '{query}'")
-        with st.spinner("🤖 Agent is working..."):
-            # Run the Agentic Workflow
-            result = agent_manager.run_agent(query, user_email)
+    # 2. Initialize Session State for Chat History
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        
+    # 3. Display Chat History
+    for message in st.session_state.messages:
+        with st.chat_message(message.type):
+            st.markdown(message.content)
+            # If the stored message has additional metadata (like a chart), display it
+            if hasattr(message, "additional_kwargs"):
+                chart = message.additional_kwargs.get("chart")
+                if chart: st.plotly_chart(chart, use_container_width=True)
+                file = message.additional_kwargs.get("file")
+                if file and os.path.exists(file):
+                    with open(file, "rb") as f:
+                        st.download_button(label="📥 Download Report", data=f, file_name=os.path.basename(file), key=f"dl_{file}")
+
+    # 4. Chat Input
+    if query := st.chat_input("What would you like to know?"):
+        # Display User Message
+        with st.chat_message("human"):
+            st.markdown(query)
+        
+        # Add to history
+        st.session_state.messages.append(HumanMessage(content=query))
+        
+        # 5. Run Agent
+        with st.spinner("🤖 Agent is thinking..."):
+            result = agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1])
             
-            # --- 🤖 A. Display AI Answer ---
-            st.markdown("### 🤖 Assistant Response")
-            # Filter and display AI messages from the graph state
-            for msg in result.get("messages", []):
-                if isinstance(msg, AIMessage):
-                    st.write(msg.content)
+            # --- 🤖 A. Display Assistant Response ---
+            # The agent returns the full updated message list. We want the NEW AIMessage.
+            new_msgs = [m for m in result["messages"] if isinstance(m, AIMessage) and m not in st.session_state.messages]
             
-            # --- 📊 B. Display Generated Chart ---
-            chart_data = result.get("generated_chart")
-            if chart_data:
-                st.markdown("### 📊 Visualization")
-                st.plotly_chart(chart_data, use_container_width=True)
-            
-            # --- 💾 C. Provide Download Link ---
-            file_path = result.get("generated_file")
-            if file_path and os.path.exists(file_path):
-                st.markdown("### 📑 Generated Report")
-                with open(file_path, "rb") as f:
-                    st.download_button(
-                        label="📥 Download Excel Report",
-                        data=f,
-                        file_name=os.path.basename(file_path),
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+            for ai_msg in new_msgs:
+                with st.chat_message("assistant"):
+                    st.markdown(ai_msg.content)
+                    
+                    # Store chart/file in message metadata for persistence
+                    ai_msg.additional_kwargs = {}
+                    
+                    # --- 📊 B. Display Generated Chart ---
+                    chart_data = result.get("generated_chart")
+                    if chart_data:
+                        st.plotly_chart(chart_data, use_container_width=True)
+                        ai_msg.additional_kwargs["chart"] = chart_data
+                    
+                    # --- 💾 C. Provide Download Link ---
+                    file_path = result.get("generated_file")
+                    if file_path and os.path.exists(file_path):
+                        with open(file_path, "rb") as f:
+                            st.download_button(
+                                label="📥 Download Excel Report",
+                                data=f,
+                                file_name=os.path.basename(file_path),
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                        ai_msg.additional_kwargs["file"] = file_path
+                
+                st.session_state.messages.append(ai_msg)
 
             # --- 🔍 D. Source Data Expander ---
             df = result.get("invoices_df")
             if df is not None and not df.empty:
-                with st.expander(f"View {len(df)} Source Documents"):
+                with st.expander(f"View {len(df)} Matched Records"):
                     cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description"]
-                    # Show dataframe with relevant columns
                     st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")

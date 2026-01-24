@@ -40,6 +40,32 @@ def is_valid_invoice_amount(total: any) -> bool:
     val = clean_amount(total)
     return val > 0
 
+def clean_invoice_number(inv_str: str) -> str:
+    """
+    Cleans an invoice number string by removing common labels,
+    prefixes, and unwanted symbols while preserving alphanumeric characters.
+    """
+    if not inv_str:
+        return ""
+    
+    # Common labels/prefixes to remove (case-insensitive)
+    labels = [
+        r"invoice\s*no\.?", r"invoice\s*number", r"bill\s*no\.?", r"bill\s*number",
+        r"challan\s*no\.?", r"challan\s*number", r"receipt\s*no\.?", r"receipt\s*number",
+        r"inv\s*#", r"bill\s*#", r"no\.?", r"num\.?", r"#"
+    ]
+    
+    cleaned = str(inv_str).strip()
+    
+    # Remove labels from the beginning
+    for label in labels:
+        cleaned = re.sub(f"^{label}\s*:?\s*", "", cleaned, flags=re.I)
+    
+    # Remove noise at the end or around
+    cleaned = re.sub(r"^[:\s]+|[:\s]+$", "", cleaned)
+    
+    return cleaned.strip()
+
 def regex_parse_invoice(text: str) -> Dict[str, str]:
     """Fallback regex-based parser for invoice data."""
     lines = text.split("\n")
@@ -55,8 +81,9 @@ def regex_parse_invoice(text: str) -> Dict[str, str]:
     }
     
     # Optimized regex for invoice numbers
-    inv_match = re.search(r'(?:invoice|bill|challan|#|receipt)\s*(?:no|number|#)?\s*:?\s*([A-Z0-9\-/]+)', text, re.I)
-    if inv_match: data["invoice_number"] = inv_match.group(1).strip()
+    inv_match = re.search(r'(?:invoice|bill|challan|#|receipt|inv)\s*(?:no|number|#)?\s*:?\s*([A-Z0-9\-/]+)', text, re.I)
+    if inv_match: 
+        data["invoice_number"] = clean_invoice_number(inv_match.group(1))
     
     date_match = re.search(r'(?:date|dated|journey|boarding|boarding\s*date)\s*:?\s*([0-9]{1,2}[/\-\.\s]+(?:[0-9]{1,2}|[A-Za-z]{3})[/\-\.\s]+[0-9]{2,4})', text, re.I)
     if date_match: 

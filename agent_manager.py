@@ -36,11 +36,14 @@ def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str):
     """Generates a Plotly chart based on the data."""
     try:
         if chart_type == "bar":
-            fig = px.bar(data, x="vendor_name", y="total_amount", title=title)
+            fig = px.bar(data, x=data.columns[0], y="total_amount", title=title)
         elif chart_type == "pie":
-            fig = px.pie(data, values="total_amount", names="vendor_name", title=title)
-        elif chart_type == "line":
-            fig = px.line(data, x="invoice_date", y="total_amount", title=title)
+            fig = px.pie(data, values="total_amount", names=data.columns[0], title=title)
+        elif chart_type == "line" or chart_type == "sensex":
+            # "sensex" graph is a line chart with markers
+            fig = px.line(data, x=data.columns[0], y="total_amount", title=title, markers=True)
+            if chart_type == "sensex":
+                fig.update_traces(line=dict(width=3, color='royalblue'), marker=dict(size=10, symbol='diamond'))
         else:
             return None
         
@@ -133,13 +136,23 @@ def analyst_node(state: AgentState):
     llm = get_llm()
     df = db.read_db(user_id=state["user_email"])
     
-    prompt = f"""You are a Financial Analyst. Analyze this query: '{user_query}'
+    # Provide the last few messages for context in the prompt
+    history_context = "\n".join([f"{msg.type}: {msg.content}" for msg in state["messages"][:-1]])
+    
+    prompt = f"""You are a Financial Analyst. 
+    Conversational Context:
+    {history_context}
+    
+    Latest User Query: '{user_query}'
+    
+    Analyze the query considering the context above. If the user refers to "them", "that", "these", or asks for modifications to a previous search, use the conversational history to resolve the references.
+    
     Available nodes: 'designer' (for visuals), 'secretary' (for reports/emails), 'END'.
     Data available for vendors like: {df['vendor_name'].unique().tolist() if not df.empty else 'None'}
     
     Extract Search Filters if mentioned:
     - vendor_name: (partial or exact)
-    - invoice_number: (string)
+    - invoice_number: (alphanumeric identifier, strip labels like "Invoice #" or "No:")
     - target_year: (4-digit year like '2025')
     - target_month: (month name or number 1-12)
     - target_day: (day of the month 1-31)
@@ -165,6 +178,11 @@ def analyst_node(state: AgentState):
         
         next_node = decision.get("next_node", END)
         filters = decision.get("filters", {})
+        
+        # Clean invoice number if present in filters
+        if filters.get("invoice_number"):
+            from data_normalization_utils import clean_invoice_number
+            filters["invoice_number"] = clean_invoice_number(filters["invoice_number"])
         
         if filters.get("vendor_name"):
             df = df[df['vendor_name'].str.contains(filters['vendor_name'], case=False, na=False)]
@@ -229,15 +247,24 @@ def designer_node(state: AgentState):
         
     user_query = state["messages"][0].content
     llm = get_llm()
-    prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line') is best for {len(df)} rows? "
-    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title"}'
+    prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line', 'sensex') is best for {len(df)} rows? "
+    prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '
+    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | none"}'
     
     try:
         response = llm.invoke(prompt)
         cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
         chart_type = cfg.get("chart_type", "bar")
+        aggregate_by = cfg.get("aggregate_by", "none")
         title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
-    except:
+        
+        if aggregate_by == "month":
+            df = df.copy()
+            df['month'] = pd.to_datetime(df['invoice_date']).dt.strftime('%Y-%m')
+            df = df.groupby('month')['total_amount'].sum().reset_index().sort_values('month')
+            
+    except Exception as e:
+        logger.warning(f"Designer failed to select chart: {e}")
         chart_type, title = "bar", "Expense Analysis"
 
     chart_json = generate_chart_tool(df, chart_type, title)
@@ -295,7 +322,11 @@ def get_agent_graph():
     workflow.add_edge("secretary", END)
     return workflow.compile()
 
-def run_agent(user_query: str, user_email: str):
+def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = None):
+    history = history or []
     app = get_agent_graph()
-    inputs = {"messages": [HumanMessage(content=user_query)], "user_email": user_email}
+    inputs = {
+        "messages": history + [HumanMessage(content=user_query)], 
+        "user_email": user_email
+    }
     return app.invoke(inputs)

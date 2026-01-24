@@ -168,6 +168,7 @@ def extract_filter_parameters(user_input: str) -> Optional[Dict]:
     - Dates must be in 'MMM DD YYYY' format (e.g. Feb 01 2023).
     - If a whole year is mentioned (e.g. "2025"), return the full range: "Jan 01 2025" to "Dec 31 2025".
     - If no year is specified, assume 2023 or contextually relevant.
+    - For invoice_number, extract ONLY the alphanumeric identifier, stripping any labels like "Invoice #".
     """
     
     response_text, _ = llm_call(prompt)
