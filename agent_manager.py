@@ -12,6 +12,7 @@ from langgraph.graph import StateGraph, END
 from app_logger import get_logger
 import db
 import streamlit as st
+import tempfile
 
 logger = get_logger(__name__)
 
@@ -24,6 +25,7 @@ class AgentState(TypedDict):
     user_email: str
     invoices_df: pd.DataFrame
     generated_chart: Dict # JSON representation of Plotly chart
+    generated_chart_file: str # Path to created HTML chart file
     generated_file: str # Path to created Excel file
     next_step: str # To guide the graph flow
     extracted_filters: Dict # Search criteria like vendor, year, or invoice #
@@ -45,12 +47,17 @@ def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str):
             if chart_type == "sensex":
                 fig.update_traces(line=dict(width=3, color='royalblue'), marker=dict(size=10, symbol='diamond'))
         else:
-            return None
+            return None, None
         
-        return fig.to_json()
+        # Save as interactive HTML for emailing
+        filename = f"Chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        filepath = os.path.join(tempfile.gettempdir(), filename)
+        fig.write_html(filepath)
+        
+        return fig.to_json(), filepath
     except Exception as e:
         logger.error(f"Chart tool failed: {e}")
-        return None
+        return None, None
 
 def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None):
     """
@@ -59,7 +66,7 @@ def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None)
     - Multi-sheet: If target_year is provided and NO target_month/target_day is provided.
     - Single-sheet: Otherwise.
     """
-    filepath = os.path.join(os.getcwd(), filename)
+    filepath = os.path.join(tempfile.gettempdir(), filename)
     filters = filters or {}
     target_year = filters.get("target_year")
     target_month = filters.get("target_month")
@@ -95,8 +102,8 @@ def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None)
     data.to_excel(filepath, index=False)
     return filepath
 
-def send_email_tool(to_email: str, subject: str, body: str, attachment_path: str = None):
-    """Sends an email with an optional attachment."""
+def send_email_tool(to_email: str, subject: str, body: str, attachments: List[str] = None):
+    """Sends an email with optional attachments."""
     try:
         smtp_user = st.secrets.get("smtp_user")
         smtp_pass = st.secrets.get("smtp_password")
@@ -110,7 +117,7 @@ def send_email_tool(to_email: str, subject: str, body: str, attachment_path: str
             to=to_email,
             subject=subject,
             contents=body,
-            attachments=attachment_path
+            attachments=attachments
         )
         return True
     except Exception as e:
@@ -137,7 +144,7 @@ def analyst_node(state: AgentState):
     df = db.read_db(user_id=state["user_email"])
     
     # Provide the last few messages for context in the prompt
-    history_context = "\n".join([f"{msg.type}: {msg.content}" for msg in state["messages"][:-1]])
+    history_context = "\n".join([f"{'User' if msg.type=='human' else 'Assistant'}: {msg.content}" for msg in state["messages"][:-1]])
     
     prompt = f"""You are a Financial Analyst. 
     Conversational Context:
@@ -145,9 +152,11 @@ def analyst_node(state: AgentState):
     
     Latest User Query: '{user_query}'
     
-    Analyze the query considering the context above. If the user refers to "them", "that", "these", or asks for modifications to a previous search, use the conversational history to resolve the references.
-    
-    Available nodes: 'designer' (for visuals), 'secretary' (for reports/emails), 'END'.
+    TASK:
+    1. Analyze the latest query considering the context above.
+    2. If the user refers to "them", "that", "these", or asks for modifications to a previous search, resolve the references.
+    3. IMPORTANT: If the query is a continuation (e.g., "Now graph them", "Filter by 2024", "Email this", "Send me the chart"), you MUST CARRY OVER relevant filters (vendor_name, invoice_number, etc.) from previous turns unless the user explicitly changes them.
+    4. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'END'.
     Data available for vendors like: {df['vendor_name'].unique().tolist() if not df.empty else 'None'}
     
     Extract Search Filters if mentioned:
@@ -267,9 +276,10 @@ def designer_node(state: AgentState):
         logger.warning(f"Designer failed to select chart: {e}")
         chart_type, title = "bar", "Expense Analysis"
 
-    chart_json = generate_chart_tool(df, chart_type, title)
+    chart_json, chart_file = generate_chart_tool(df, chart_type, title)
     return {
         "generated_chart": json.loads(chart_json) if chart_json else None, 
+        "generated_chart_file": chart_file,
         "messages": [AIMessage(content=f"I've generated a {chart_type} for the selected data.")], 
         "next_step": END
     }
@@ -282,25 +292,29 @@ def secretary_node(state: AgentState):
     dest_email = filters.get("target_email") or state["user_email"]
     
     msg = ""
-    file_path = None
+    attachments = []
     
+    # Check for Excel report request
     if any(k in user_query.lower() for k in ["excel", "report", "download"]):
-        # Build a descriptive suffix
         time_parts = [str(filters.get(k)) for k in ["target_day", "target_month", "target_year"] if filters.get(k)]
         suffix = "_".join(time_parts) or filters.get("vendor_name") or "Report"
-        
         file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
-        
+        attachments.append(file_path)
         is_multi = filters.get("target_year") and not (filters.get("target_month") or filters.get("target_day"))
-        msg += f"Excel report generated (multi-sheet by month for {filters['target_year']}). " if is_multi else "Excel report generated. "
+        msg += f"Excel report generated. "
         
-    if "email" in user_query.lower():
-        subject = f"Financial Report: {filters.get('target_year', filters.get('vendor_name', 'Export'))}"
-        body = f"Attached is the requested financial analysis."
-        success = send_email_tool(dest_email, subject, body, file_path)
+    # Check for Graph/Email chart request
+    if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]) and any(k in user_query.lower() for k in ["graph", "chart", "visual"]):
+        attachments.append(state["generated_chart_file"])
+        msg += "Graph included in email. "
+
+    if "email" in user_query.lower() or "send" in user_query.lower():
+        subject = f"Financial Analysis Request"
+        body = f"Hello,\n\nPlease find the requested financial data attached."
+        success = send_email_tool(dest_email, subject, body, [a for a in attachments if a])
         msg += f"Email sent to {dest_email}." if success else "Email delivery failed."
         
-    return {"generated_file": file_path, "messages": [AIMessage(content=msg)], "next_step": END}
+    return {"messages": [AIMessage(content=msg)], "next_step": END}
 
 # ==============================================================================
 # 4. Graph Construction
