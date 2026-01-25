@@ -38,9 +38,14 @@ class AgentState(TypedDict):
 def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str = None, y: str = "total_amount"):
     """Generates a Plotly chart based on the data."""
     try:
-        # Default X to 'month' if it exists, else the first column
+        # Default X to 'month' if it exists, else use the first column or 'vendor_name'
         if not x:
-            x = "month" if "month" in data.columns else data.columns[5]
+            if "month" in data.columns:
+                x = "month"
+            elif "vendor_name" in data.columns:
+                x = "vendor_name"
+            else:
+                x = data.columns[0]
         
         # Determine available hover columns
         hover_cols = [c for c in ["vendor_name", "description"] if c in data.columns]
@@ -297,12 +302,13 @@ def designer_node(state: AgentState):
     if df.empty:
         return {"messages": [AIMessage(content="No data found to visualize.")], "next_step": END}
         
-    user_query = state["messages"][0].content
+    user_query = state["messages"][-1].content
     llm = get_llm()
     prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line', 'sensex') is best for {len(df)} rows? "
+    prompt += 'IMPORTANT: If the user explicitly asks for a specific type (e.g., "pie" or "bar"), you MUST use that. '
     prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '
     prompt += 'Identify if they specified X or Y axis columns. '
-    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | none", "x_axis": "col_name", "y_axis": "col_name"}'
+    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | vendor | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
         response = llm.invoke(prompt)
@@ -326,17 +332,31 @@ def designer_node(state: AgentState):
             
             df = df.groupby('month').agg(agg_dict).reset_index().sort_values('month')
             x_axis = "month"
+        elif aggregate_by == "vendor":
+            agg_dict = {y_axis: 'sum' if y_axis in df.columns else 'count'}
+            if 'description' in df.columns: 
+                agg_dict['description'] = lambda x: '; '.join(pd.Series(x).dropna().unique()[:3])
+            df = df.groupby('vendor_name').agg(agg_dict).reset_index().sort_values(y_axis, ascending=False)
+            x_axis = "vendor_name"
             
     except Exception as e:
         logger.warning(f"Designer failed to select chart: {e}")
         chart_type, title, x_axis, y_axis = "bar", "Expense Analysis", None, "total_amount"
 
     chart_json, chart_file = generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
+    
+    # Handoff to secretary if email is requested
+    email_keywords = ["email", "send", "mail"]
+    if any(k in user_query.lower() for k in email_keywords):
+        next_step = "secretary"
+    else:
+        next_step = END
+
     return {
         "generated_chart": json.loads(chart_json) if chart_json else None, 
         "generated_chart_file": chart_file,
         "messages": [AIMessage(content=f"I've generated a {chart_type} for the selected data.")], 
-        "next_step": END
+        "next_step": next_step
     }
 
 def secretary_node(state: AgentState):
@@ -394,7 +414,13 @@ def get_agent_graph():
         lambda x: x["next_step"],
         {"designer": "designer", "secretary": "secretary", END: END}
     )
-    workflow.add_edge("designer", END)
+    
+    # Designer can go to secretary or END
+    workflow.add_conditional_edges(
+        "designer",
+        lambda x: x["next_step"],
+        {"secretary": "secretary", END: END}
+    )
     workflow.add_edge("secretary", END)
     return workflow.compile()
 

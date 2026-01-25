@@ -118,10 +118,12 @@ def run_chat_interface():
         
         # 6. Run Agent
         with st.spinner("🤖 Agent is thinking..."):
+            prev_msg_count = len(st.session_state.messages)
             result = agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1])
             
             # --- 🤖 A. Display Assistant Response ---
-            new_msgs = [m for m in result["messages"] if isinstance(m, AIMessage) and m not in st.session_state.messages]
+            # Extract only the NEW messages added by the agent
+            new_msgs = result["messages"][prev_msg_count:]
             
             for i, ai_msg in enumerate(new_msgs):
                 with st.chat_message("assistant"):
