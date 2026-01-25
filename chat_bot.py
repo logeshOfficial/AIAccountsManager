@@ -121,52 +121,62 @@ def run_chat_interface():
             prev_msg_count = len(st.session_state.messages)
             result = agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1])
             
-            # --- 🤖 A. Display Assistant Response ---
-            # Extract only the NEW messages added by the agent
-            new_msgs = result["messages"][prev_msg_count:]
+            # --- 🤖 A. Consolidate Assistant Responses ---
+            # Instead of multiple bubbles, we merge everything into one clean response
+            new_msgs = [m for m in result["messages"][prev_msg_count:] if isinstance(m, AIMessage)]
             
-            for i, ai_msg in enumerate(new_msgs):
+            if new_msgs:
+                combined_content = "\n\n".join([m.content for m in new_msgs if m.content])
+                
+                # Merge metadata (charts, files, filters)
+                combined_kwargs = {
+                    "filters": result.get("extracted_filters", {}),
+                    "chart": result.get("generated_chart"),
+                    "file": result.get("generated_file"),
+                    "chart_file": result.get("generated_chart_file")
+                }
+                
+                # Also merge any other kwargs from the messages themselves
+                for m in new_msgs:
+                    if hasattr(m, 'additional_kwargs'):
+                        combined_kwargs.update(m.additional_kwargs)
+                
+                # Render consolidated message
                 with st.chat_message("assistant"):
-                    st.markdown(ai_msg.content)
-                    ai_msg.additional_kwargs = {
-                        "filters": result.get("extracted_filters", {})
-                    }
+                    st.markdown(combined_content)
                     
-                    # --- 📊 B. Display Generated Chart ---
-                    chart_data = result.get("generated_chart")
-                    if chart_data:
-                        st.plotly_chart(chart_data, use_container_width=True, key=f"new_chart_{i}_{datetime.now().timestamp()}")
-                        ai_msg.additional_kwargs["chart"] = chart_data
+                    # Display Chart if present
+                    if combined_kwargs.get("chart"):
+                        st.plotly_chart(combined_kwargs["chart"], use_container_width=True, key=f"new_chart_{datetime.now().timestamp()}")
                     
-                    # --- 💾 C. Provide Download Link ---
-                    file_path = result.get("generated_file")
-                    if file_path and os.path.exists(file_path):
+                    # Display Excel Download if present
+                    if combined_kwargs.get("file") and os.path.exists(combined_kwargs["file"]):
+                        file_path = combined_kwargs["file"]
                         with open(file_path, "rb") as f:
                             st.download_button(
                                 label="📥 Download Excel Report",
                                 data=f,
                                 file_name=os.path.basename(file_path),
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key=f"new_dl_{i}_{os.path.basename(file_path)}"
+                                key=f"new_dl_{datetime.now().timestamp()}"
                             )
-                        ai_msg.additional_kwargs["file"] = file_path
-                    
-                    # --- 📊 D. Provide Chart Download Link ---
-                    chart_file = result.get("generated_chart_file")
-                    if chart_file and os.path.exists(chart_file):
+                            
+                    # Display Chart Download if present
+                    if combined_kwargs.get("chart_file") and os.path.exists(combined_kwargs["chart_file"]):
+                        chart_file = combined_kwargs["chart_file"]
                         with open(chart_file, "rb") as f:
                             st.download_button(
                                 label="📥 Download Interactive Chart",
                                 data=f,
                                 file_name=os.path.basename(chart_file),
                                 mime="text/html",
-                                key=f"new_dl_chart_{i}_{os.path.basename(chart_file)}"
+                                key=f"new_dl_chart_{datetime.now().timestamp()}"
                             )
-                        ai_msg.additional_kwargs["chart_file"] = chart_file
-                
-                # Save and add to history
-                db.save_chat_message(st.session_state.current_session_id, "ai", ai_msg.content, ai_msg.additional_kwargs)
-                st.session_state.messages.append(ai_msg)
+
+                # Save and add to session history as a SINGLE message
+                consolidated_msg = AIMessage(content=combined_content, additional_kwargs=combined_kwargs)
+                db.save_chat_message(st.session_state.current_session_id, "ai", consolidated_msg.content, consolidated_msg.additional_kwargs)
+                st.session_state.messages.append(consolidated_msg)
 
             # --- 🔍 E. Source Data Expander ---
             df = result.get("invoices_df")
