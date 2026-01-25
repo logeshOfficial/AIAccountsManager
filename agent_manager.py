@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     generated_file: str # Path to created Excel file
     next_step: str # To guide the graph flow
     extracted_filters: Dict # Search criteria like vendor, year, or invoice #
+    evidence_found: bool # Curried RAG flag for validation
 
 # ==============================================================================
 # 2. Tool Implementations
@@ -251,15 +252,44 @@ def analyst_node(state: AgentState):
         elif filters.get('invoice_number') or len(df) == 1:
             inv = df.iloc[0]
             summary += f"Details: Invoice #{inv['invoice_number']} from {inv['vendor_name']} ({inv['invoice_date']}) for ${inv['total_amount']:.2f}."
+        evidence_found = True
     else:
-        summary = "I couldn't find any invoices matching those specific details."
+        summary = "I couldn't find any invoices matching those specific details in your records."
+        evidence_found = False
         
     return {
         "invoices_df": df, 
         "messages": [AIMessage(content=summary)], 
         "next_step": next_node,
-        "extracted_filters": filters
+        "extracted_filters": filters,
+        "evidence_found": evidence_found
     }
+
+def validator_node(state: AgentState):
+    """
+    Curried RAG Guardrail: Validates if the retrieved data (evidence) 
+    is sufficient for the requested action.
+    """
+    df = state["invoices_df"]
+    user_query = state["messages"][0].content.lower()
+    next_step = state.get("next_step", END)
+    evidence_found = state.get("evidence_found", False)
+    
+    # List of intent keywords that require evidence
+    data_intents = ["graph", "chart", "visual", "excel", "report", "download", "send", "email", "how much", "total spent"]
+    is_data_query = any(k in user_query for k in data_intents)
+    
+    logger.info(f"Validator Node: Data Query={is_data_query}, Evidence Found={evidence_found}")
+    
+    if is_data_query and not evidence_found:
+        msg = "⚠️ I lack the specific invoice evidence to perform that action or answer that question accurately. Please check your query or ensure the data is synced from Drive."
+        return {
+            "messages": [AIMessage(content=msg)],
+            "next_step": END
+        }
+    
+    # If evidence is found or it's a general query, allow the flow to continue
+    return {"next_step": next_step}
 
 def designer_node(state: AgentState):
     """Smart chart generation on FILTERED data."""
@@ -279,7 +309,7 @@ def designer_node(state: AgentState):
         cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
         chart_type = cfg.get("chart_type", "bar")
         aggregate_by = cfg.get("aggregate_by", "none")
-        x_axis = cfg.get("x_axis")
+        x_axis = cfg.get("x_axis", "invoice_date")
         y_axis = cfg.get("y_axis", "total_amount")
         title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
@@ -352,12 +382,15 @@ def secretary_node(state: AgentState):
 def get_agent_graph():
     workflow = StateGraph(AgentState)
     workflow.add_node("analyst", analyst_node)
+    workflow.add_node("validator", validator_node)
     workflow.add_node("designer", designer_node)
     workflow.add_node("secretary", secretary_node)
     workflow.set_entry_point("analyst")
     
+    workflow.add_edge("analyst", "validator")
+    
     workflow.add_conditional_edges(
-        "analyst",
+        "validator",
         lambda x: x["next_step"],
         {"designer": "designer", "secretary": "secretary", END: END}
     )
