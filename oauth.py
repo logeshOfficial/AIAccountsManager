@@ -45,29 +45,43 @@ def ensure_google_login(show_ui: bool = True):
 
     code = st.query_params.get("code")
     if code:
-        flow = Flow.from_client_config(
-            _client_config(),
-            scopes=_scopes(),
-            redirect_uri=st.secrets["REDIRECT_URI"],
-        )
-
-        flow.fetch_token(code=code)
-        st.session_state["creds"] = flow.credentials
-
-        # Fetch and store user email for tenant isolation
+        # 1. Check if already handled by a concurrent run
+        if "creds" in st.session_state:
+            st.query_params.clear()
+            st.rerun()
+            
         try:
-            oauth2 = build("oauth2", "v2", credentials=flow.credentials)
-            info = oauth2.userinfo().get().execute()
-            email = (info or {}).get("email", "")
-            st.session_state["user_email"] = email
-            logger.info(f"User logged in successfully: {email}", extra={"user_id": email})
-        except Exception as e:
-            logger.error(f"Failed to fetch user email after login: {e}")
-            # If we can't fetch email, keep empty; app will treat as not authenticated for data access.
-            st.session_state["user_email"] = ""
+            flow = Flow.from_client_config(
+                _client_config(),
+                scopes=_scopes(),
+                redirect_uri=st.secrets["REDIRECT_URI"],
+            )
+            flow.fetch_token(code=code)
+            st.session_state["creds"] = flow.credentials
+            
+            # 2. Fetch and store user email for tenant isolation
+            try:
+                oauth2 = build("oauth2", "v2", credentials=flow.credentials)
+                info = oauth2.userinfo().get().execute()
+                email = (info or {}).get("email", "")
+                st.session_state["user_email"] = email
+                logger.info(f"User logged in successfully: {email}", extra={"user_id": email})
+            except Exception as e:
+                logger.error(f"Failed to fetch user email after login: {e}")
+                st.session_state["user_email"] = ""
 
-        st.query_params.clear()
-        st.rerun()
+            st.query_params.clear()
+            st.rerun()
+        except Exception as e:
+            # 3. Defensive check: if creds appeared during the attempt, just rerun
+            if "creds" in st.session_state:
+                st.query_params.clear()
+                st.rerun()
+            
+            logger.error(f"OAuth token exchange failed: {e}")
+            st.error(f"Authentication failed: {e}. Please click the login link again.")
+            st.query_params.clear()
+            st.stop()
 
     # -----------------------------
     # GENERATE AUTH URL
