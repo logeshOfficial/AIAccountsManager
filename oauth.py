@@ -45,11 +45,15 @@ def ensure_google_login(show_ui: bool = True):
 
     code = st.query_params.get("code")
     if code:
-        # 1. Check if already handled by a concurrent run
-        if "creds" in st.session_state:
-            st.query_params.clear()
-            st.rerun()
-            
+        # 1. Check if already handled or being handled
+        if st.session_state.get("code_processing") == code:
+            if "creds" in st.session_state:
+                st.query_params.clear()
+                st.rerun()
+            return
+
+        st.session_state["code_processing"] = code
+        
         try:
             flow = Flow.from_client_config(
                 _client_config(),
@@ -70,17 +74,20 @@ def ensure_google_login(show_ui: bool = True):
                 logger.error(f"Failed to fetch user email after login: {e}")
                 st.session_state["user_email"] = ""
 
+            # Explicitly clear params before rerun
             st.query_params.clear()
             st.rerun()
         except Exception as e:
-            # 3. Defensive check: if creds appeared during the attempt, just rerun
+            # 3. Defensive check: if creds appeared during the attempt (race condition), just rerun
             if "creds" in st.session_state:
                 st.query_params.clear()
                 st.rerun()
             
-            logger.error(f"OAuth token exchange failed: {e}")
+            logger.error(f"OAuth token exchange failed for code {code[:5]}...: {e}")
             st.error(f"Authentication failed: {e}. Please click the login link again.")
             st.query_params.clear()
+            # Reset processing state on failure to allow retry
+            st.session_state["code_processing"] = None
             st.stop()
 
     # -----------------------------
