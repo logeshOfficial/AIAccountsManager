@@ -173,4 +173,4 @@ def run_chat_interface():
             if df is not None and not df.empty:
                 with st.expander(f"View {len(df)} Matched Records"):
                     cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description"]
-                    st.dataframe(df[[c for c in cols_to_show if c in df.columns]], widthuse_container_width="stretch")
+                    st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")
