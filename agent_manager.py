@@ -315,7 +315,7 @@ def designer_node(state: AgentState):
         cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
         chart_type = cfg.get("chart_type", "bar")
         aggregate_by = cfg.get("aggregate_by", "none")
-        x_axis = cfg.get("x_axis", "")
+        x_axis = cfg.get("x_axis", "invoice_date")
         y_axis = cfg.get("y_axis", "total_amount")
         title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
