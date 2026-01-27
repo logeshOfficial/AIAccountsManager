@@ -1,88 +1,79 @@
-# 📊 AI Accounts Manager: Agentic Invoice Intelligence
+# 📊 AI Accounts Manager v2.0: Agentic Financial Intelligence
 
-An elite, **multi-agent financial assistant** that automates the entire lifecycle of invoice management—from intelligent extraction to deep analysis and automated delivery.
+An elite, **multi-agent financial ecosystem** that automates the entire lifecycle of corporate expense management. From intelligent OCR extraction to deep trend analysis and automated report delivery, powered by **LangGraph** and **SOTA LLMs**.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Core Intelligence Pillars
 
 ### 🤖 Multi-Agent Framework (LangGraph)
-Powered by a sophisticated agentic workflow:
-- **Analyst Node**: Performs deep data lookup, extracts granular filters (vendor, year, month, date), and provides natural language explanations.
-- **Designer Node**: Intelligently selects and generates data visualizations (Plotly) based on your query context.
-- **Secretary Node**: Handles high-fidelity Excel report generation and automated email delivery.
+The system leverages a sophisticated DAG-based workflow to resolve complex financial queries:
+- **🧠 Analyst Agent**: Conducts granular data investigation, resolves conversational references, and provides deep natural language summaries of financial health.
+- **🎨 Designer Agent**: Intelligently selects the optimal visualization (Pie, Bar, Line, or "Sensex" Trends) based on data density and timeframe context.
+- **💼 Secretary Agent**: Orchestrates professional Excel generation and secure email delivery to stakeholders.
 
-### 📄 3-Tier Advanced Vision Engine
-Robust OCR hierarchy ensuring maximum extraction accuracy:
-1. **Tier 1 (Gemini 2.0)**: SOTA multimodal extraction.
-2. **Tier 2 (GPT-4o)**: High-precision fallback.
-3. **Tier 3 (Local Donut)**: On-device OCR fallback (naver-clova-ix/donut-base) using `transformers`.
+### 📄 High-Efficiency PDF Extraction
+The system focuses on high-precision text extraction from PDF documents, ensuring rapid and accurate processing of digital financial records.
 
 ### 📈 Smart Year & Month Reports
 Intelligent Excel generation logic:
 - **Yearly Reports**: Generates a single workbook with **separate sheets for each month** (Jan-Dec) automatically.
 - **Granular Filtering**: Focus on specific months, dates, or vendors with single-sheet extracts.
-- **Automated Delivery**: Email reports directly to custom destinations (e.g., "Email the 2025 report to finance@company.com").
+- **Automated Delivery**: Email reports directly to custom destinations (e.g., "Email the 2025 report to finance").
+- **Vendor Insights**: Prioritizes grouping by **Vendor Name** when keywords like "consumed" or "most" are detected.
+- **Premium Themes**: Uses calibrated "Plotly White" templates with diamond-open markers for professional "Sensex-style" growth analysis.
 
 ---
 
-## 🛠️ Setup Guide
+## 🛠️ Technical Architecture
 
-### 1. Installation
-```powershell
-git clone <repository-url>
-cd AIAccountsManager
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
+### Stack
+- **Backend**: Python 3.10+
+- **Agentic Logic**: LangGraph / LangChain
+- **UI Framework**: Streamlit (Modernized Layout)
+- **Database**: Supabase (PostgreSQL)
+- **Models**: Groq (Llama-3.3-70b), OpenAI (GPT-4o-mini), Google (Gemini)
+- **Exports**: OpenPyXL & Plotly HTML
+
+### Storage & Privacy
+- **Automatic Cleanup**: Temporary reports and charts are automatically purged from the `exports/` directory immediately after delivery or after 20 minutes of inactivity.
+- **Session Isolation**: Multi-tenant architecture ensures users only see their own financial data.
+
+---
+
+## 📂 Installation & Setup
+
+### 1. Environment Configuration
+Populate `.streamlit/secrets.toml` or your environment variables:
+```toml
+# AI Keys
+groq_api_key = "..."
+openai_api_key = "..."
+gemini_api_key = "..."
+
+# Database & Auth
+supabase_url = "..."
+supabase_key = "..."
+GOOGLE_CLIENT_ID = "..."
+GOOGLE_CLIENT_SECRET = "..."
+
+# Services
+smtp_user = "finance@company.com"
+smtp_password = "app-password"
 ```
 
-### 2. Configuration (`.streamlit/secrets.toml`)
-Populate your secrets with these keys:
-
-| Key | Description |
-| :--- | :--- |
-| **LLMs** | `groq_api_key`, `openai_api_key`, `gemini_api_key` |
-| **Database** | `supabase_url`, `supabase_key` |
-| **GCP** | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `REDIRECT_URI` |
-| **Email** | `smtp_user` (Gmail), `smtp_password` (App Password) |
-| **Config** | `admin_email`, `INPUT_DOCS` (Drive folder name) |
-
-### 3. Running the App
+### 2. Launch
 ```powershell
-# From the root directory
+python -m venv venv
+.\venv\Scripts\activate.ps1
+pip install -r requirements.txt
 streamlit run main.py
 ```
 
 ---
 
-## 📖 Pro Workflow
+## 🛡️ Role-Based Access
+- **Finance Admins**: Access to global logging and full database visibility.
+- **System Users**: Isolated workspace for personal invoice management.
 
-### 1. Sync & Process
-Navigate to **Drive Manager** to sync PDFs from Google Drive. The system extracts data and moves processed files to `scanned_docs`.
-
-### 2. Agentic Chat
-Go to **Chat_Bot** and interact with the agents:
-- *"Tell me about the Amazon invoice from last week."*
-- *"Graph my Microsoft expenses for 2024."*
-- *"Generate an Excel for all 2025 invoices and email it to me."*
-
-### 3. Multi-Sheet Exports
-Ask for a **Year** (e.g., "for 2025") to receive a consolidated Excel with sheets named by month. Ask for a **Month** for a focused single-sheet extract.
-
----
-
-## 📂 Project Architecture
-
-- `main.py`: Entry point and Streamlit routing.
-- `agent_manager.py`: LangGraph multi-agent logic and state definition.
-- `vision_engine.py`: 3-tier OCR hierarchy logic.
-- `db.py`: Supabase PostgreSQL integration.
-- `invoice_processor.py`: Field extraction and normalization.
-- `chat_bot.py`: Direct interface for agent interaction.
-
----
-
-## 🛡️ Security & Roles
-- **Admins**: Full global visibility and system log access.
-- **Users**: Strict tenant-based isolation (only see your own invoices).
+*Copyright © 2026 AI Accounts Manager. All rights reserved.*

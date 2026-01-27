@@ -7,8 +7,7 @@ import plotly.express as px
 import yagmail
 from typing import Annotated, List, Dict, TypedDict, Union
 from datetime import datetime
-from langchain_openai import ChatOpenAI
-from langchain_groq import ChatGroq
+from llm_manager import get_agent_llm
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from app_logger import get_logger
@@ -162,12 +161,9 @@ def send_email_tool(to_email: str, subject: str, body: str, attachments: List[st
         logger.error(f"Email tool failed: {e}")
         return False
 
-def get_llm():
-    """Returns the primary LLM (Groq for speed/fallback)."""
-    api_key = st.secrets.get("groq_api_key")
-    if api_key:
-        return ChatGroq(api_key=api_key, model_name="llama-3.3-70b-versatile")
-    return ChatOpenAI(model="gpt-4o-mini")
+    except Exception as e:
+        logger.error(f"Email tool failed: {e}")
+        return False
 
 def extract_json_from_text(text: str) -> Dict:
     """Robustly extracts JSON from LLM output using Regex."""
@@ -212,7 +208,7 @@ def analyst_node(state: AgentState):
     user_query = state["messages"][-1].content
     logger.info(f"Analyst Node: Advanced Analysis for '{user_query}'")
     
-    llm = get_llm()
+    llm = get_agent_llm()
     df = db.read_db(user_id=state["user_email"])
     
     # Provide the last few messages for context in the prompt
@@ -399,7 +395,7 @@ def designer_node(state: AgentState):
             user_query = msg.content
             break
             
-    llm = get_llm()
+    llm = get_agent_llm()
     prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line', 'sensex') is best for {len(df)} rows? "
     prompt += 'IMPORTANT: If the user explicitly asks for a specific type (e.g., "pie" or "bar"), you MUST use that. '
     prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '

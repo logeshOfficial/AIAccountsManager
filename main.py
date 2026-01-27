@@ -30,7 +30,7 @@ logger.info("Application started")
 view = st.query_params.get("view", "home")
 logger.info(f"Current view: {view}")
 
-st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home"}))
+# st.sidebar.button("Home", on_click=lambda: st.query_params.update({"view": "home"}))
 st.sidebar.button("Chat_Bot", on_click=lambda: st.query_params.update({"view": "chat"}))
 st.sidebar.button("Drive_Manager", on_click=lambda: st.query_params.update({"view": "drive"}))
 

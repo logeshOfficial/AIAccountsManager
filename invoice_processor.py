@@ -10,7 +10,6 @@ from app_logger import get_logger
 from llm_manager import llm_call
 import data_normalization_utils as utils
 import pdf_engine
-import vision_engine
 import config
 import time
 
@@ -152,10 +151,8 @@ class InvoiceProcessor:
                     df = pd.read_csv(io.BytesIO(data), dtype=str) if ext == ".csv" else pd.read_excel(io.BytesIO(data), dtype=str)
                     text = df.fillna("").to_csv(index=False)
                 elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
-                    # Add mandatory cooldown for images to avoid Free Tier Rate Limits (429)
-                    if idx > 0: time.sleep(3) 
-                    text = vision_engine.extract_text_with_vision(_get_bytes(file_id), name)
-                    if not text: error = "Vision extraction failed (Limit reached or API error)"
+                    error = "Image extraction (OCR) is currently disabled. PDF and structural documents only."
+                    logger.warning(f"⏩ Doc {idx+1}: {error}")
                 else:
                     text = _get_bytes(file_id).decode("utf-8", errors="ignore")
             except Exception as e:

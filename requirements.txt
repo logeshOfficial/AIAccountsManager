@@ -13,12 +13,8 @@ standard-imghdr
 
 google-genai
 openai
-pillow
 groq
 supabase
-transformers
-torch
-sentencepiece
 langgraph
 langchain
 langchain-openai

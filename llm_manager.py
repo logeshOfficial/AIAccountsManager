@@ -4,6 +4,9 @@ import json
 import re
 from typing import Tuple, Dict, Optional, Any
 from google.genai import types
+from datetime import datetime
+from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from app_logger import get_logger
 
 logger = get_logger(__name__)
@@ -47,14 +50,37 @@ def get_groq_client():
 def get_fallback_client():
     """Initializes the fallback AI client (Gemini)."""
     api_key = st.secrets.get("gemini_api_key")
-    
     if not api_key:
         return None
-        
     try:
         return ai_models.initiate_gemini_model(api_key=api_key)
-    except Exception as e:
+    except Exception:
         return None
+
+def get_agent_llm():
+    """
+    Standardized LangChain-compatible LLM provider with fallback logic.
+    Priority: Groq (llama-3.3-70b) -> OpenAI (gpt-4o-mini) -> Gemini (1.5-flash)
+    """
+    # 1. Try Groq (Fastest)
+    groq_key = st.secrets.get("groq_api_key")
+    if groq_key:
+        try:
+            return ChatGroq(api_key=groq_key, model_name="llama-3.3-70b-versatile", timeout=10)
+        except Exception as e:
+            logger.warning(f"Failed to init ChatGroq: {e}")
+
+    # 2. Try OpenAI (Smartest fallback)
+    openai_key = st.secrets.get("openai_api_key")
+    if openai_key:
+        try:
+            return ChatOpenAI(api_key=openai_key, model="gpt-4o-mini")
+        except Exception as e:
+            logger.warning(f"Failed to init ChatOpenAI: {e}")
+
+    # 3. Final Fallback (If strictly needed - use Groq with default settings if keys exist)
+    logger.error("No reliable agent LLM could be initialized.")
+    return None
 
 def llm_call(prompt: str) -> Tuple[str, str]:
     """
