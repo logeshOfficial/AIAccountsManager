@@ -303,6 +303,8 @@ def analyst_node(state: AgentState):
         decision = json.loads(clean_content)
         
         next_node = decision.get("next_node", END)
+        if str(next_node).upper() == "END":
+            next_node = END
         filters = decision.get("filters", {})
         
         # Clean invoice number if present in filters
@@ -413,7 +415,7 @@ def validator_node(state: AgentState):
     is_data_query = any(k in user_query for k in data_intents)
     
     # Logic: If user specifically asked for 'sync', always allow it
-    if next_step == "sync":
+    if str(next_step).lower() == "sync":
         return {"next_step": "sync"}
 
     logger.info(f"Validator Node: Data Query={is_data_query}, Evidence Found={evidence_found}")
@@ -697,7 +699,7 @@ def get_agent_graph():
     workflow.add_conditional_edges(
         "validator",
         lambda x: x["next_step"],
-        {"designer": "designer", "secretary": "secretary", "sync": "sync", END: END}
+        {"designer": "designer", "secretary": "secretary", "sync": "sync", "END": END, END: END}
     )
     
     # Sync loops back to analyst
@@ -707,7 +709,7 @@ def get_agent_graph():
     workflow.add_conditional_edges(
         "designer",
         lambda x: x["next_step"],
-        {"secretary": "secretary", END: END}
+        {"secretary": "secretary", "END": END, END: END}
     )
     workflow.add_edge("secretary", END)
     return workflow.compile()

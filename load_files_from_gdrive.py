@@ -154,7 +154,7 @@ def initiate_drive(creds):
     st.info(f"📁 **Active Folder:** `{st.secrets.get('INPUT_DOCS', 'Invoice_Input')}`")
     st.markdown("""
     ### 🤖 How to Synchronize
-    You no longer need to click a button here. Simply go to the **Chat Bot** and say:
+    Simply go to the **Chat Bot** and say:
     * *"Sync my drive"*
     * *"Check for new invoices"*
     * *"Refresh my data"*
