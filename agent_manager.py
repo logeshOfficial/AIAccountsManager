@@ -1,6 +1,7 @@
-import os
 import json
+import os
 import time
+import zipfile
 import re
 import pandas as pd
 import plotly.express as px
@@ -578,25 +579,52 @@ def secretary_node(state: AgentState):
 
     # Clean duplicates and verify paths
     attachments = list(set([a for a in attachments if a and os.path.exists(a)]))
-    logger.info(f"Secretary Node: Found {len(attachments)} attachments to send: {attachments}")
+    
+    # --- 📦 ZIP Attachments for Reliability ---
+    # yagmail can embed HTML inline, which clips the message. 
+    # Zipping ensures they arrive as binary attachments.
+    zip_path = None
+    if attachments:
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            zip_filename = f"Financial_Reports_{timestamp}.zip"
+            zip_path = os.path.join("exports", zip_filename)
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file in attachments:
+                    zipf.write(file, os.path.basename(file))
+            
+            logger.info(f"Secretary Node: Zipped {len(attachments)} files into {zip_path}")
+        except Exception as e:
+            logger.warning(f"Secretary Node: Zipping failed: {e}")
+            zip_path = None
 
     send_confirm = ""
-    if "email" in user_query.lower() or "send" in user_query.lower():
+    if ("email" in user_query.lower() or "send" in user_query.lower()) and (attachments or zip_path):
         subject = f"Financial Analysis Report"
-        body = f"Hello,\n\nPlease find the requested financial data attached."
+        body = (
+            "Hello,\n\n"
+            "Please find your requested financial reports and interactive charts attached.\n\n"
+            "Note: All files are bundled into a single ZIP file to ensure interactive chart functionality "
+            "and prevent email clipping."
+        )
+        
+        # Use the zip if successfully created, else fallback to raw attachments
+        final_attachments = [zip_path] if zip_path else attachments
         
         # Send to each email
         success_count = 0
         for email in dest_emails:
-            if send_email_tool(email, subject, body, attachments):
+            if send_email_tool(email, subject, body, final_attachments):
                 success_count += 1
         
         if success_count > 0:
             send_confirm = f"✅ Report sent successfully to {', '.join(dest_emails[:2])}{' and others' if len(dest_emails)>2 else ''}."
             
             # --- 🚀 Immediate Cleanup after successful Send ---
-            # Remove files from server once they are in the user's inbox
-            for a in attachments:
+            # Remove original files and the zip from server
+            cleanup_list = attachments + ([zip_path] if zip_path else [])
+            for a in cleanup_list:
                 try:
                     if os.path.exists(a):
                         os.remove(a)
