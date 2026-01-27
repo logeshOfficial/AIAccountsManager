@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import pandas as pd
 import plotly.express as px
 import yagmail
@@ -144,6 +145,23 @@ def get_llm():
         return ChatGroq(api_key=api_key, model_name="llama-3.3-70b-versatile")
     return ChatOpenAI(model="gpt-4o-mini")
 
+def extract_json_from_text(text: str) -> Dict:
+    """Robustly extracts JSON from LLM output using Regex."""
+    try:
+        # Try direct load first
+        return json.loads(text.strip())
+    except Exception:
+        # Look for JSON block between curly braces
+        match = re.search(r"(\{[\s\S]*\})", text)
+        if match:
+            try:
+                # Basic cleaning of common markdown noise
+                clean_json = match.group(0).replace('```json', '').replace('```', '').strip()
+                return json.loads(clean_json)
+            except Exception:
+                pass
+    return {}
+
 # ==============================================================================
 # 3. Agent Nodes
 # ==============================================================================
@@ -251,20 +269,40 @@ def analyst_node(state: AgentState):
 
     if not df.empty:
         summary = f"🔍 [V2.0] I found {len(df)} matching records. "
+        
+        # --- Descriptive Analysis Hook ---
+        is_descriptive = any(k in user_query.lower() for k in ["describe", "explain", "detailed", "brief", "overview", "summary"])
+        if is_descriptive:
+            try:
+                # Quick financial snapshot for the summary
+                total_spent = df['total_amount'].sum()
+                top_vendor = df.groupby('vendor_name')['total_amount'].sum().idxmax()
+                avg_val = df['total_amount'].mean()
+                
+                summary += f"\n\n**Financial Overview:**\n"
+                summary += f"- **Total Expenditure:** ${total_spent:,.2f}\n"
+                summary += f"- **Primary Vendor:** {top_vendor}\n"
+                summary += f"- **Average Invoice Value:** ${avg_val:,.2f}\n"
+                summary += "\nThis dataset provides a comprehensive look at your financial activity for the requested period."
+            except Exception:
+                pass
+
         if filters.get('target_year') and not (filters.get('target_month') or filters.get('target_day')):
-            summary += f"Processing yearly overview for {filters['target_year']} (multi-sheet by month)."
+            summary += f"\n\nProcessing yearly overview for {filters['target_year']} (multi-sheet by month)."
         elif filters.get('target_month'):
-            summary += f"Filtered for {filters['target_month']} {filters.get('target_year', '')}."
+            summary += f"\n\nFiltered for {filters['target_month']} {filters.get('target_year', '')}."
         elif filters.get('invoice_number') or len(df) == 1:
             inv = df.iloc[0]
-            summary += f"Details: Invoice #{inv['invoice_number']} from {inv['vendor_name']} ({inv['invoice_date']}) for ${inv['total_amount']:.2f}."
+            summary += f"\n\nDetails: Invoice #{inv['invoice_number']} from {inv['vendor_name']} ({inv['invoice_date']}) for ${inv['total_amount']:.2f}."
         evidence_found = True
     else:
         summary = "I couldn't find any invoices matching those specific details in your records."
         evidence_found = False
         
-    # Only show analyst summary if we aren't handing off to a visual/report node
-    display_summary = summary if next_node == END else ""
+    # Show summary if it's descriptive OR if we are ending the graph (END)
+    # This ensures "describe 2012" shows the text AND the chart/report.
+    is_descriptive = any(k in user_query.lower() for k in ["describe", "explain", "detailed", "brief", "overview", "summary"])
+    display_summary = summary if (next_node == END or is_descriptive) else ""
     
     return {
         "invoices_df": df, 
@@ -321,11 +359,21 @@ def designer_node(state: AgentState):
     prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | vendor | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
-        # Check for explicit user request for chart type/axes in query
-        explicit_chart = any(k in user_query.lower() for k in ["pie", "line", "bar", "sensex", "trend"])
-        explicit_axes = any(k in user_query.lower() for k in ["axis", "x-axis", "y-axis", "param"])
+        # Determine chart type with overrides
+        explicit_chart_type = None
+        lower_query = user_query.lower()
+        if "sensex" in lower_query or "trend" in lower_query:
+            explicit_chart_type = "sensex"
+        elif "pie" in lower_query or "pei" in lower_query: # Handle user typo
+            explicit_chart_type = "pie"
+        elif "line" in lower_query:
+            explicit_chart_type = "line"
+        elif "bar" in lower_query:
+            explicit_chart_type = "bar"
+            
+        explicit_axes = any(k in lower_query for k in ["axis", "x-axis", "y-axis", "param"])
         
-        if not explicit_chart and not explicit_axes:
+        if not explicit_chart_type and not explicit_axes:
             # Apply defaults based on filters
             filters = state.get("extracted_filters", {})
             if filters.get("target_year") and not filters.get("target_month"):
@@ -344,7 +392,7 @@ def designer_node(state: AgentState):
             else:
                 # Fallback to LLM for other cases
                 response = llm.invoke(prompt)
-                cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
+                cfg = extract_json_from_text(response.content)
                 chart_type = cfg.get("chart_type", "bar")
                 aggregate_by = cfg.get("aggregate_by", "none")
                 x_axis = cfg.get("x_axis", "")
@@ -353,8 +401,8 @@ def designer_node(state: AgentState):
         else:
             # User is asking to change something, use LLM to interpret
             response = llm.invoke(prompt)
-            cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
-            chart_type = cfg.get("chart_type", "bar")
+            cfg = extract_json_from_text(response.content)
+            chart_type = explicit_chart_type or cfg.get("chart_type", "bar")
             aggregate_by = cfg.get("aggregate_by", "none")
             x_axis = cfg.get("x_axis", "")
             y_axis = cfg.get("y_axis", "total_amount")
@@ -388,7 +436,9 @@ def designer_node(state: AgentState):
     
     # Detailed response with interactive prompt
     msg = f"📊 [V2.0] I've generated a {chart_type} chart for the selected data.\n\n"
-    msg += "Would you like to change the chart type (e.g., sensex, trend, pie) or modify the X/Y axes parameters (e.g., group by vendor, or change to a line chart)?"
+    msg += "📍 **Next Steps:**\n"
+    msg += "- **Customize:** Would you like to change the chart type (e.g., sensex, trend, pie) or modify the X/Y axes parameters?\n"
+    msg += "- **Email:** If you'd like to email this graph to yourself or others, just reply with the email addresses!"
     
     additional_kwargs = {"chart_file": chart_file}
     
@@ -442,7 +492,7 @@ def secretary_node(state: AgentState):
         
     # Check for Graph/Email chart request
     if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
-        if any(k in user_query.lower() for k in ["graph", "chart", "visual", "it"]):
+        if any(k in user_query.lower() for k in ["graph", "chart", "visual", "it", "visuals"]):
             attachments.append(state["generated_chart_file"])
 
     send_confirm = ""
@@ -468,8 +518,8 @@ def secretary_node(state: AgentState):
             "**The Excel report has been generated successfully!**\n\n"
             "📍 **Next Steps:**\n"
             "- **Download:** Click the **Download Excel Report** button below to save it to your device.\n"
-            "- **Email:** If you want to send this report to clients or colleagues, just reply with their email addresses (e.g., `user1@example.com, user2@example.com`). I'll handle the delivery for you.\n"
-            "- **Visualize:** I can also create charts or summaries if you need a quick overview of these records.\n\n"
+            "- **Email:** If you want to send this report (and any generated graphs) to clients or colleagues, just reply with their email addresses (e.g., `user1@example.com, user2@example.com`). I'll handle the delivery for you.\n"
+            "- **Visualize:** I can also create more charts or summaries if you need a different perspective on these records.\n\n"
             f"{send_confirm}"
         )
     elif send_confirm:
