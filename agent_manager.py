@@ -1,7 +1,6 @@
 import json
 import os
 import time
-import zipfile
 import re
 import pandas as pd
 import plotly.express as px
@@ -503,7 +502,7 @@ def designer_node(state: AgentState):
     msg = f"📊 [V2.0] I've generated a {chart_type} chart for the selected data.\n\n"
     msg += "📍 **Next Steps:**\n"
     msg += "- **Customize:** Would you like to change the chart type (e.g., sensex, trend, pie) or modify the X/Y axes parameters?\n"
-    msg += "- **Email:** If you'd like to email this graph to yourself or others, just reply with the email addresses!"
+    msg += "- **Download:** If you need the data, I can generate an Excel report for you to download or email."
     
     additional_kwargs = {"chart_file": chart_file}
     
@@ -559,7 +558,7 @@ def secretary_node(state: AgentState):
     msg = ""
     attachments = []
     
-    # 1. Check for Excel report request or existing file
+    # 1. Check for Excel report request
     is_report_request = any(k in user_query.lower() for k in ["excel", "report", "download"])
     if is_report_request:
         time_parts = [str(filters.get(k)) for k in ["target_day", "target_month", "target_year"] if filters.get(k)]
@@ -567,64 +566,30 @@ def secretary_node(state: AgentState):
         file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
         attachments.append(file_path)
     elif state.get("generated_file"):
-        # If no new report requested but we have an old one and user says "send it"
+        # If no new report requested but we have an old one and user explicitly says "send it"
         if any(k in user_query.lower() for k in ["email", "send", "mail", "it", "them", "report"]):
             attachments.append(state["generated_file"])
-    
-    # 2. Check for Chart attachment
-    if state.get("generated_chart_file"):
-        chart_keywords = ["graph", "chart", "visual", "it", "them", "results", "visuals", "me"]
-        if any(k in user_query.lower() for k in chart_keywords) or "email" in user_query.lower():
-            attachments.append(state["generated_chart_file"])
 
     # Clean duplicates and verify paths
     attachments = list(set([a for a in attachments if a and os.path.exists(a)]))
     
-    # --- 📦 ZIP Attachments for Reliability ---
-    # yagmail can embed HTML inline, which clips the message. 
-    # Zipping ensures they arrive as binary attachments.
-    zip_path = None
-    if attachments:
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            zip_filename = f"Financial_Reports_{timestamp}.zip"
-            zip_path = os.path.join("exports", zip_filename)
-            
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file in attachments:
-                    zipf.write(file, os.path.basename(file))
-            
-            logger.info(f"Secretary Node: Zipped {len(attachments)} files into {zip_path}")
-        except Exception as e:
-            logger.warning(f"Secretary Node: Zipping failed: {e}")
-            zip_path = None
-
     send_confirm = ""
-    if ("email" in user_query.lower() or "send" in user_query.lower()) and (attachments or zip_path):
+    # ONLY send email if explicitly requested and we have something to send
+    if ("email" in user_query.lower() or "send" in user_query.lower()) and attachments:
         subject = f"Financial Analysis Report"
-        body = (
-            "Hello,\n\n"
-            "Please find your requested financial reports and interactive charts attached.\n\n"
-            "Note: All files are bundled into a single ZIP file to ensure interactive chart functionality "
-            "and prevent email clipping."
-        )
-        
-        # Use the zip if successfully created, else fallback to raw attachments
-        final_attachments = [zip_path] if zip_path else attachments
+        body = "Hello,\n\nPlease find the requested financial report attached."
         
         # Send to each email
         success_count = 0
         for email in dest_emails:
-            if send_email_tool(email, subject, body, final_attachments):
+            if send_email_tool(email, subject, body, attachments):
                 success_count += 1
         
         if success_count > 0:
             send_confirm = f"✅ Report sent successfully to {', '.join(dest_emails[:2])}{' and others' if len(dest_emails)>2 else ''}."
             
             # --- 🚀 Immediate Cleanup after successful Send ---
-            # Remove original files and the zip from server
-            cleanup_list = attachments + ([zip_path] if zip_path else [])
-            for a in cleanup_list:
+            for a in attachments:
                 try:
                     if os.path.exists(a):
                         os.remove(a)
@@ -637,12 +602,11 @@ def secretary_node(state: AgentState):
     # Build detailed user-facing response
     if is_report_request:
         msg = (
-            f"📁 [V2.0] Success! I found {len(df)} matching records. Processing the report overview.\n\n"
+            f"📁 [V2.0] Success! I found {len(df)} matching records.\n\n"
             "**The Excel report has been generated successfully!**\n\n"
             "📍 **Next Steps:**\n"
-            "- **Download:** Click the **Download Excel Report** button below to save it to your device.\n"
-            "- **Email:** If you want to send this report (and any generated graphs) to clients or colleagues, just reply with their email addresses (e.g., `user1@example.com, user2@example.com`). I'll handle the delivery for you.\n"
-            "- **Visualize:** I can also create more charts or summaries if you need a different perspective on these records.\n\n"
+            "- **Download:** Click the **Download Excel Report** button below.\n"
+            "- **Email:** If you want to send this report, just reply with the email addresses (e.g., `user@example.com`).\n\n"
             f"{send_confirm}"
         )
     elif send_confirm:
