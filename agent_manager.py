@@ -308,14 +308,14 @@ def designer_node(state: AgentState):
     prompt += 'IMPORTANT: If the user explicitly asks for a specific type (e.g., "pie" or "bar"), you MUST use that. '
     prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '
     prompt += 'Identify if they specified X or Y axis columns. '
-    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | total_amount | none", "x_axis": "col_name", "y_axis": "col_name"}'
+    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | vendor | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
         response = llm.invoke(prompt)
         cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
         chart_type = cfg.get("chart_type", "bar")
         aggregate_by = cfg.get("aggregate_by", "none")
-        x_axis = cfg.get("x_axis", "invoice_date")
+        x_axis = cfg.get("x_axis", "")
         y_axis = cfg.get("y_axis", "total_amount")
         title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
