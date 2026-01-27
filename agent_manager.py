@@ -390,82 +390,52 @@ def designer_node(state: AgentState):
             
         explicit_axes = any(k in lower_query for k in ["axis", "x-axis", "y-axis", "param"])
         
-        if not explicit_chart_type and not explicit_axes:
-            # Apply defaults based on filters
-            filters = state.get("extracted_filters", {})
-            if filters.get("target_year") and not filters.get("target_month"):
-                chart_type = "bar"
-                aggregate_by = "month"
-                x_axis = "month"
-                y_axis = "total_amount"
-                title = f"Monthly Expenses for {filters['target_year']}"
-            elif filters.get("target_month"):
-                chart_type = "bar"
-                aggregate_by = "none" # Use raw date for day-level detail
-                x_axis = "date"
-                y_axis = "total_amount"
-                month_name = filters["target_month"]
-                title = f"Daily Expenses for {month_name} {filters.get('target_year', '')}"
-            else:
-                # Fallback to LLM for other cases
-                response = llm.invoke(prompt)
-                cfg = extract_json_from_text(response.content)
-                chart_type = cfg.get("chart_type", "bar")
-                aggregate_by = cfg.get("aggregate_by", "none")
-                x_axis = cfg.get("x_axis", "none")
-                y_axis = cfg.get("y_axis", "total_amount")
-                
-                # --- Column Sanitization ---
-                if x_axis and str(x_axis).lower() == "none":
-                    x_axis = None
-                if y_axis and str(y_axis).lower() == "none":
-                    y_axis = "total_amount"
-                    
-                col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
-                if y_axis not in df.columns and y_axis and y_axis.lower() in col_map:
-                    y_axis = col_map[y_axis.lower()]
-                if y_axis not in df.columns:
-                    y_axis = "total_amount"
-                    
-                title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
+        # Determine configuration with LLM and Overrides
+        response = llm.invoke(prompt)
+        cfg = extract_json_from_text(response.content)
+        
+        chart_type = explicit_chart_type or cfg.get("chart_type", "bar")
+        aggregate_by = cfg.get("aggregate_by", "none")
+        x_axis = cfg.get("x_axis", "none")
+        y_axis = cfg.get("y_axis", "total_amount")
+        
+        # --- 🌐 Unified Smart Defaults (Timeframe & Vendor) ---
+        # These rules override LLM recommendations to ensure consistency
+        filters = state.get("extracted_filters", {})
+        
+        if any(k in lower_query for k in ["vendor", "consumed", "most", "who", "whom"]):
+            aggregate_by = "vendor_name"
+            x_axis = "vendor_name"
+            title_suffix = f"by Vendor"
+        elif filters.get("target_year") and not filters.get("target_month"):
+            aggregate_by = "month"
+            x_axis = "month"
+            title_suffix = f"by Month ({filters['target_year']})"
+        elif filters.get("target_month"):
+            aggregate_by = "none"
+            x_axis = "date"
+            title_suffix = f"by Date ({filters['target_month']})"
         else:
-            # User is asking to change something, use LLM to interpret
-            response = llm.invoke(prompt)
-            cfg = extract_json_from_text(response.content)
-            chart_type = explicit_chart_type or cfg.get("chart_type", "bar")
-            aggregate_by = cfg.get("aggregate_by", "none")
-            x_axis = cfg.get("x_axis", "none")
-            y_axis = cfg.get("y_axis", "total_amount")
-            
-            # --- 🥧 Smart Pie Defaults ---
-            if chart_type == "pie":
-                filters = state.get("extracted_filters", {})
-                if any(k in lower_query for k in ["vendor", "consumed", "most", "who", "whom"]):
-                    aggregate_by = "vendor_name"
-                    x_axis = "vendor_name"
-                    title = f"Expense Breakdown by Vendor"
-                elif filters.get("target_year") and not filters.get("target_month"):
-                    aggregate_by = "month"
-                    x_axis = "month"
-                    title = f"Yearly Expense Distribution ({filters['target_year']})"
-                elif filters.get("target_month"):
-                    aggregate_by = "none"
-                    x_axis = "date"
-                    title = f"Daily Distribution for {filters['target_month']}"
+            title_suffix = ""
 
-            # --- Column Sanitization ---
-            if x_axis and str(x_axis).lower() == "none":
-                x_axis = None
-            if y_axis and str(y_axis).lower() == "none":
-                y_axis = "total_amount"
-                
-            col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
-            if y_axis not in df.columns and y_axis and y_axis.lower() in col_map:
-                y_axis = col_map[y_axis.lower()]
-            if y_axis not in df.columns:
-                y_axis = "total_amount"
-                
-            title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
+        # Construct final title if LLM didn't provide a good one or if we applied overrides
+        if title_suffix:
+            title = f"{chart_type.title()} Chart {title_suffix}"
+        else:
+            title = cfg.get("title", "Financial Analysis")
+
+        # --- Column Sanitization ---
+        if x_axis and str(x_axis).lower() == "none":
+            x_axis = None
+        if y_axis and str(y_axis).lower() == "none":
+            y_axis = "total_amount"
+            
+        col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
+        if y_axis not in df.columns and y_axis and y_axis.lower() in col_map:
+            y_axis = col_map[y_axis.lower()]
+        if y_axis not in df.columns:
+            y_axis = "total_amount"
+
         
         if aggregate_by == "month":
             df = df.copy()
@@ -557,21 +527,27 @@ def secretary_node(state: AgentState):
     msg = ""
     attachments = []
     
-    # Check for Excel report request
+    # 1. Check for Excel report request or existing file
     is_report_request = any(k in user_query.lower() for k in ["excel", "report", "download"])
     if is_report_request:
         time_parts = [str(filters.get(k)) for k in ["target_day", "target_month", "target_year"] if filters.get(k)]
         suffix = "_".join(time_parts) or filters.get("vendor_name") or "Report"
         file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
         attachments.append(file_path)
-        
-    elif state.get("generated_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
-        attachments.append(state["generated_file"])
-        
-    # Check for Graph/Email chart request
-    if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
-        if any(k in user_query.lower() for k in ["graph", "chart", "visual", "it", "visuals"]):
+    elif state.get("generated_file"):
+        # If no new report requested but we have an old one and user says "send it"
+        if any(k in user_query.lower() for k in ["email", "send", "mail", "it", "them", "report"]):
+            attachments.append(state["generated_file"])
+    
+    # 2. Check for Chart attachment
+    if state.get("generated_chart_file"):
+        chart_keywords = ["graph", "chart", "visual", "it", "them", "results", "visuals", "me"]
+        if any(k in user_query.lower() for k in chart_keywords) or "email" in user_query.lower():
             attachments.append(state["generated_chart_file"])
+
+    # Clean duplicates and verify paths
+    attachments = list(set([a for a in attachments if a and os.path.exists(a)]))
+    logger.info(f"Secretary Node: Found {len(attachments)} attachments to send: {attachments}")
 
     send_confirm = ""
     if "email" in user_query.lower() or "send" in user_query.lower():
@@ -581,7 +557,7 @@ def secretary_node(state: AgentState):
         # Send to each email
         success_count = 0
         for email in dest_emails:
-            if send_email_tool(email, subject, body, [a for a in attachments if a]):
+            if send_email_tool(email, subject, body, attachments):
                 success_count += 1
         
         if success_count > 0:
