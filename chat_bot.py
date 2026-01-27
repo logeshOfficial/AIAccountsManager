@@ -42,7 +42,7 @@ def run_chat_interface():
     # 2. Session Management in Sidebar
     with st.sidebar:
         st.header("💬 Chat Sessions")
-        if st.button("➕ New Chat", use_container_width=True):
+        if st.button("➕ New Chat", width='stretch'):
             st.session_state.current_session_id = db.create_chat_session(user_email)
             st.session_state.messages = []
             st.rerun()
@@ -53,7 +53,7 @@ def run_chat_interface():
             for session in sessions:
                 col1, col2 = st.columns([0.8, 0.2])
                 with col1:
-                    if st.button(f"📄 {session['title']}", key=f"sess_{session['id']}", use_container_width=True):
+                    if st.button(f"📄 {session['title']}", key=f"sess_{session['id']}", width='stretch'):
                         st.session_state.current_session_id = session['id']
                         # Load messages from DB
                         db_msgs = db.get_chat_messages(session['id'])
@@ -94,7 +94,7 @@ def run_chat_interface():
             # If the stored message has additional metadata (like a chart), display it
             if hasattr(message, "additional_kwargs"):
                 chart = message.additional_kwargs.get("chart")
-                if chart: st.plotly_chart(chart, use_container_width=True, key=f"hist_chart_{i}")
+                if chart: st.plotly_chart(chart, width='stretch', key=f"hist_chart_{i}")
                 file = message.additional_kwargs.get("file")
                 if file and os.path.exists(file):
                     label = "📥 Download Excel" if file.endswith(".xlsx") else "📥 Download Chart"
@@ -145,9 +145,8 @@ def run_chat_interface():
                 with st.chat_message("assistant"):
                     st.markdown(combined_content)
                     
-                    # Display Chart if present
                     if combined_kwargs.get("chart"):
-                        st.plotly_chart(combined_kwargs["chart"], use_container_width=True, key=f"new_chart_{datetime.now().timestamp()}")
+                        st.plotly_chart(combined_kwargs["chart"], width='stretch', key=f"new_chart_{datetime.now().timestamp()}")
                     
                     # Display Excel Download if present
                     if combined_kwargs.get("file") and os.path.exists(combined_kwargs["file"]):

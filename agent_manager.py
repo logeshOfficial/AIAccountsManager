@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import re
 import pandas as pd
 import plotly.express as px
@@ -74,8 +75,9 @@ def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str 
             return None, None
         
         # Save as interactive HTML for emailing
+        os.makedirs("exports", exist_ok=True)
         filename = f"Chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-        filepath = os.path.join(tempfile.gettempdir(), filename)
+        filepath = os.path.join("exports", filename)
         fig.write_html(filepath)
         
         return fig.to_json(), filepath
@@ -90,7 +92,8 @@ def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None)
     - Multi-sheet: If target_year is provided and NO target_month/target_day is provided.
     - Single-sheet: Otherwise.
     """
-    filepath = os.path.join(tempfile.gettempdir(), filename)
+    os.makedirs("exports", exist_ok=True)
+    filepath = os.path.join("exports", filename)
     filters = filters or {}
     target_year = filters.get("target_year")
     target_month = filters.get("target_month")
@@ -182,6 +185,23 @@ def extract_json_from_text(text: str) -> Dict:
             except Exception:
                 pass
     return {}
+
+def cleanup_old_exports(max_age_minutes: int = 20):
+    """Deletes files in the exports/ directory older than specified minutes."""
+    try:
+        if not os.path.exists("exports"):
+            return
+            
+        current_time = time.time()
+        for filename in os.listdir("exports"):
+            filepath = os.path.join("exports", filename)
+            if os.path.isfile(filepath):
+                file_age = (current_time - os.path.getmtime(filepath)) / 60
+                if file_age > max_age_minutes:
+                    os.remove(filepath)
+                    logger.info(f"Cleanup: Removed old export file: {filename}")
+    except Exception as e:
+        logger.warning(f"Cleanup failed: {e}")
 
 # ==============================================================================
 # 3. Agent Nodes
@@ -573,6 +593,16 @@ def secretary_node(state: AgentState):
         
         if success_count > 0:
             send_confirm = f"✅ Report sent successfully to {', '.join(dest_emails[:2])}{' and others' if len(dest_emails)>2 else ''}."
+            
+            # --- 🚀 Immediate Cleanup after successful Send ---
+            # Remove files from server once they are in the user's inbox
+            for a in attachments:
+                try:
+                    if os.path.exists(a):
+                        os.remove(a)
+                        logger.info(f"Secretary: Cleanup successful for {os.path.basename(a)}")
+                except Exception as e:
+                    logger.warning(f"Secretary: Cleanup failed for {a}: {e}")
         else:
             send_confirm = "❌ Email delivery failed. Please check your credentials or recipient addresses."
 
@@ -633,19 +663,26 @@ def get_agent_graph():
 def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = None):
     history = history or []
     
-    # --- 🔄 Restore Context from History ---
+    # --- 🧹 Automatic Storage Cleanup ---
+    cleanup_old_exports()
+    
+    # --- 🔄 Restore Context from History (Full Scan) ---
     last_filters = {}
     last_chart_file = None
     last_excel_file = None
     
     for msg in reversed(history):
-        if isinstance(msg, AIMessage) and hasattr(msg, "additional_kwargs"):
+        if hasattr(msg, "additional_kwargs"):
             if not last_filters:
                 last_filters = msg.additional_kwargs.get("filters", {})
             if not last_chart_file:
                 last_chart_file = msg.additional_kwargs.get("chart_file")
             if not last_excel_file:
                 last_excel_file = msg.additional_kwargs.get("file")
+        
+        # Stop early only if we've found EVERYTHING we need
+        if last_filters and last_chart_file and last_excel_file:
+            break
                 
     app = get_agent_graph()
     inputs = {
