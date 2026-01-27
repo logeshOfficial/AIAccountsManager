@@ -412,12 +412,17 @@ def designer_node(state: AgentState):
                 cfg = extract_json_from_text(response.content)
                 chart_type = cfg.get("chart_type", "bar")
                 aggregate_by = cfg.get("aggregate_by", "none")
-                x_axis = cfg.get("x_axis", "")
+                x_axis = cfg.get("x_axis", "none")
                 y_axis = cfg.get("y_axis", "total_amount")
                 
                 # --- Column Sanitization ---
+                if x_axis and str(x_axis).lower() == "none":
+                    x_axis = None
+                if y_axis and str(y_axis).lower() == "none":
+                    y_axis = "total_amount"
+                    
                 col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
-                if y_axis not in df.columns and y_axis.lower() in col_map:
+                if y_axis not in df.columns and y_axis and y_axis.lower() in col_map:
                     y_axis = col_map[y_axis.lower()]
                 if y_axis not in df.columns:
                     y_axis = "total_amount"
@@ -432,6 +437,22 @@ def designer_node(state: AgentState):
             x_axis = cfg.get("x_axis", "none")
             y_axis = cfg.get("y_axis", "total_amount")
             
+            # --- 🥧 Smart Pie Defaults ---
+            if chart_type == "pie":
+                filters = state.get("extracted_filters", {})
+                if any(k in lower_query for k in ["vendor", "consumed", "most", "who", "whom"]):
+                    aggregate_by = "vendor_name"
+                    x_axis = "vendor_name"
+                    title = f"Expense Breakdown by Vendor"
+                elif filters.get("target_year") and not filters.get("target_month"):
+                    aggregate_by = "month"
+                    x_axis = "month"
+                    title = f"Yearly Expense Distribution ({filters['target_year']})"
+                elif filters.get("target_month"):
+                    aggregate_by = "none"
+                    x_axis = "date"
+                    title = f"Daily Distribution for {filters['target_month']}"
+
             # --- Column Sanitization ---
             if x_axis and str(x_axis).lower() == "none":
                 x_axis = None
@@ -460,6 +481,10 @@ def designer_node(state: AgentState):
             df['month'] = pd.Categorical(df['month'], categories=month_order, ordered=True)
             df = df.sort_values('month')
             x_axis = "month"
+        elif aggregate_by == "vendor_name" or (x_axis == "vendor_name" and aggregate_by != "none"):
+            df = df.copy()
+            df = df.groupby('vendor_name').agg({y_axis: 'sum'}).reset_index()
+            x_axis = "vendor_name"
         elif x_axis == "date":
             df = df.copy()
             df['date'] = pd.to_datetime(df['invoice_date']).dt.strftime('%d') # Day of month
