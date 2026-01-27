@@ -1,80 +1,50 @@
-# 📊 AI Accounts Manager v2.0: Agentic Financial Intelligence
+# 🤖 AI Accounts Manager v2.0
+### The Elite Multi-Agent Financial Assistant
 
-An elite, **multi-agent financial ecosystem** that automates the entire lifecycle of corporate expense management. From intelligent OCR extraction to deep trend analysis and automated report delivery, powered by **LangGraph** and **SOTA LLMs**.
-
----
-
-## 🚀 Core Intelligence Pillars
-
-### 🤖 Multi-Agent Framework (LangGraph)
-The system leverages a sophisticated DAG-based workflow to resolve complex financial queries:
-- **🧠 Analyst Agent**: Conducts granular data investigation, resolves conversational references, and provides deep natural language summaries.
-- **🔄 Sync Node**: **NEW!** Autonomous Google Drive synchronization directly within the chat flow.
-- **🎨 Designer Agent**: Intelligently selects the optimal visualization (Pie, Bar, Line, or "Sensex" Trends).
-- **💼 Secretary Agent**: Orchestrates professional Excel generation and secure email delivery to stakeholders.
-
-### 📄 High-Efficiency PDF Extraction
-The system focuses on high-precision text extraction from PDF documents, ensuring rapid and accurate processing of digital financial records.
-
-### 📈 Smart Year & Month Reports
-Intelligent Excel generation logic:
-- **Yearly Reports**: Generates a single workbook with **separate sheets for each month** (Jan-Dec) automatically.
-- **Granular Filtering**: Focus on specific months, dates, or vendors with single-sheet extracts.
-- **Automated Delivery**: Email reports directly to custom destinations (e.g., "Email the 2025 report to finance").
-- **Vendor Insights**: Prioritizes grouping by **Vendor Name** when keywords like "consumed" or "most" are detected.
-- **Premium Themes**: Uses calibrated "Plotly White" templates with diamond-open markers for professional "Sensex-style" growth analysis.
+AI Accounts Manager is a production-grade, agentic ecosystem designed to automate the entire lifecycle of financial document management. Powered by **LangGraph** and high-performance LLMs, it transforms a folder of messy PDF invoices into structured intelligence, interactive visualizations, and professional reports—all through a single conversational interface.
 
 ---
 
-## 🛠️ Technical Architecture
+## 🚀 Key Innovation: Fully Autonomous Workflow
+Unlike traditional software, v2.0 is driven by a **Multi-Agent Brain** that thinks, acts, and self-corrects:
 
-### Stack
-- **Backend**: Python 3.10+
-- **Agentic Logic**: LangGraph / LangChain
-- **UI Framework**: Streamlit (Modernized Layout)
-- **Database**: Supabase (PostgreSQL)
-- **Models**: Groq (Llama-3.3-70b), OpenAI (GPT-4o-mini), Google (Gemini)
-- **Exports**: OpenPyXL & Plotly HTML
-
-### Storage & Privacy
-- **Automatic Cleanup**: Temporary reports and charts are automatically purged from the `exports/` directory immediately after delivery or after 20 minutes of inactivity.
-- **Session Isolation**: Multi-tenant architecture ensures users only see their own financial data.
+- **🧠 Analyst Agent**: Conducts granular data investigation, resolves conversational references, and provides deep summaries.
+- **🔄 Sync Node**: **Autonomous** Google Drive synchronization. It provisions its own folders on login and fetches new data when needed without manual triggers.
+- **🎨 Designer Agent**: Intelligently selects and generates the optimal visualization (Pie, Bar, Line, or "Sensex" Trends) based on your query.
+- **💼 Secretary Agent**: Hand-delivers interactive reports via email and handles complex multi-sheet Excel generation.
 
 ---
 
-## 📂 Installation & Setup
+## 💎 Elite Feature Set
 
-### 1. Environment Configuration
-Populate `.streamlit/secrets.toml` or your environment variables:
-```toml
-# AI Keys
-groq_api_key = "..."
-openai_api_key = "..."
-gemini_api_key = "..."
+### 📁 Zero-Touch Onboarding
+The system provisions your infrastructure the moment you sign in. Your `Input_docs` and `Invoice_Processing` folders are created automatically—just drop your PDFs and start chatting.
 
-# Database & Auth
-supabase_url = "..."
-supabase_key = "..."
-GOOGLE_CLIENT_ID = "..."
-GOOGLE_CLIENT_SECRET = "..."
+### 📈 Intelligent Financial Visualization
+Experience **Timeframe-Aware Charting**:
+- **Yearly Perspective**: Automatically groups data by **Month** for longitudinal trends.
+- **Monthly Perspective**: Groups by **Date** for granular daily activity.
+- **Sensex-Style Trends**: Uses calibrated "Plotly White" templates with diamond markers for a premium, institutional look.
 
-# Services
-smtp_user = "finance@company.com"
-smtp_password = "app-password"
-```
-
-### 2. Launch
-```powershell
-python -m venv venv
-.\venv\Scripts\activate.ps1
-pip install -r requirements.txt
-streamlit run main.py
-```
+### 📄 Smart Multi-Sheet Reporting
+- **Yearly Overviews**: Generates professional workbooks with **separate sheets for each month** (Jan-Dec).
+- **Instant Delivery**: Just say *"Email this report to my finance team"* and the Secretary Agent handles the rest.
 
 ---
 
-## 🛡️ Role-Based Access
-- **Finance Admins**: Access to global logging and full database visibility.
-- **System Users**: Isolated workspace for personal invoice management.
+## 🛠️ Performance-First Architecture
+- **Framework**: LangGraph (Multi-Agent DAG)
+- **UI**: Streamlit (Elite Dashboard)
+- **Database**: Supabase (Cloud Infrastructure)
+- **Intelligence**: Centralized LLM Manager with dynamic fallback (Groq → OpenAI → Gemini).
+- **Core**: High-precision PDF text extraction (Zero OCR overhead).
 
-*Copyright © 2026 AI Accounts Manager. All rights reserved.*
+---
+
+## 🏁 Getting Started
+1. **Login**: Authenticate with Google.
+2. **Provision**: Your Drive folders are created instantly in the background.
+3. **Analyze**: Head to the **Chat_Bot** and say *"Sync my drive"* to begin your journey to financial clarity.
+
+---
+*Built for Scale. Driven by Agents. Powered by Intelligence.*

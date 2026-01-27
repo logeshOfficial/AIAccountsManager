@@ -165,10 +165,6 @@ def send_email_tool(to_email: str, subject: str, body: str, attachments: List[st
         logger.error(f"Email tool failed: {e}")
         return False
 
-    except Exception as e:
-        logger.error(f"Email tool failed: {e}")
-        return False
-
 def extract_json_from_text(text: str) -> Dict:
     """Robustly extracts JSON from LLM output using Regex."""
     try:
