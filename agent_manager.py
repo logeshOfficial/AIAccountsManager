@@ -127,7 +127,7 @@ def generate_excel_tool(data: pd.DataFrame, filename: str, filters: Dict = None)
     return filepath
 
 def send_email_tool(to_email: str, subject: str, body: str, attachments: List[str] = None):
-    """Sends an email with optional attachments."""
+    """Sends an email with optional attachments with robust logging."""
     try:
         smtp_user = st.secrets.get("smtp_user")
         smtp_pass = st.secrets.get("smtp_password")
@@ -137,11 +137,22 @@ def send_email_tool(to_email: str, subject: str, body: str, attachments: List[st
             return False
             
         yag = yagmail.SMTP(smtp_user, smtp_pass)
+        
+        # Verify attachments before sending
+        valid_attachments = []
+        if attachments:
+            for a in attachments:
+                if a and os.path.exists(a):
+                    valid_attachments.append(a)
+                else:
+                    logger.warning(f"send_email_tool: Skipping missing attachment: {a}")
+        
+        logger.info(f"send_email_tool: Sending email to {to_email} with {len(valid_attachments)} attachments.")
         yag.send(
             to=to_email,
             subject=subject,
             contents=body,
-            attachments=attachments
+            attachments=valid_attachments
         )
         return True
     except Exception as e:
