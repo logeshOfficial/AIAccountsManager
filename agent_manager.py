@@ -308,7 +308,7 @@ def designer_node(state: AgentState):
     prompt += 'IMPORTANT: If the user explicitly asks for a specific type (e.g., "pie" or "bar"), you MUST use that. '
     prompt += 'If the user wants a trend or "sensex" graph, use "sensex". '
     prompt += 'Identify if they specified X or Y axis columns. '
-    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | vendor | none", "x_axis": "col_name", "y_axis": "col_name"}'
+    prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | total_amount | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
         response = llm.invoke(prompt)
