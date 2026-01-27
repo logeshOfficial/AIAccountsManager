@@ -202,7 +202,7 @@ def cleanup_old_exports(max_age_minutes: int = 20):
     except Exception as e:
         logger.warning(f"Cleanup failed: {e}")
 
-def intelligent_sync_tool(user_email: str):
+def intelligent_sync_tool(user_email: str, status_obj=None):
     """
     Intelligently synchronizes Drive with the DB. 
     Can be called by the agent when it detects missing information.
@@ -227,8 +227,16 @@ def intelligent_sync_tool(user_email: str):
             "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
         }
         
+        # Define progress callback for UI
+        def update_progress(current, total, batch_count):
+            if status_obj:
+                msg = f"⏳ Processing batch {current} of {total} ({batch_count} files)..."
+                status_obj.update(label=msg, state="running")
+                logger.info(f"Sync UI Update: {msg}")
+
         count = load_files_from_gdrive.sync_engine_core(
-            drive, processor, input_folder_id, drive_dirs, user_email
+            drive, processor, input_folder_id, drive_dirs, user_email,
+            progress_callback=update_progress
         )
         
         if count > 0:
@@ -431,11 +439,14 @@ def validator_node(state: AgentState):
     return {"next_step": next_step}
 
 def sync_node(state: AgentState):
-    """Integrated Node for Drive-to-DB extraction."""
+    """Integrated Node for Drive-to-DB extraction with real-time UI feedback."""
     user_email = state["user_email"]
     logger.info(f"Sync Node triggered for {user_email}")
     
-    status_msg = intelligent_sync_tool(user_email)
+    # Wrap in Streamlit status for chatbot UI visibility
+    with st.status("🔄 Initializing Google Drive synchronization...", expanded=False) as status:
+        status_msg = intelligent_sync_tool(user_email, status_obj=status)
+        status.update(label="✅ Synchronization complete!", state="complete")
     
     # After sync, we want to re-run the analysis to see the new data
     # We return the status and tell the analyst to try again

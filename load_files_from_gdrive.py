@@ -75,27 +75,30 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     
     logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.", extra={"user_id": user_id})
 
-def sync_engine_core(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict, user_id: str):
+def sync_engine_core(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict, user_id: str, progress_callback=None):
     """Core processing loop without Streamlit UI-specific components (except logging)."""
     all_files = drive_manager.list_files_in_folder(input_folder_id)
     if not all_files:
-        return 0, 0 # valid, invalid
+        return 0
 
-    total_valid = 0
-    total_invalid = 0
+    total_files = len(all_files)
     batch_size = 10
     
-    for i in range(0, len(all_files), batch_size):
+    for i in range(0, total_files, batch_size):
         batch = all_files[i:i+batch_size]
+        current_batch_num = (i // batch_size) + 1
+        total_batches = (total_files + batch_size - 1) // batch_size
+        
+        if progress_callback:
+            progress_callback(current_batch_num, total_batches, len(batch))
+            
         try:
-            # Note: process_batch internally handles extraction, insertion, and moving files
-            results = process_batch(batch, drive_manager, processor, user_id, DRIVE_DIRS)
-            # results is None in the original, let's update process_batch to return counts
+            process_batch(batch, drive_manager, processor, user_id, DRIVE_DIRS)
         except Exception as e:
-            logger.error(f"Error in batch: {e}")
+            logger.error(f"Error in batch {current_batch_num}: {e}")
             
         gc.collect()
-    return len(all_files) # Approximate total processed
+    return total_files
 
 def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict):
     st.info("📄 Processing invoices... Please do not refresh the page.")
