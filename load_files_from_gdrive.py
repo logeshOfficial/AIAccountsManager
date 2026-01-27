@@ -144,7 +144,7 @@ def setup_drive_folders(drive: DriveManager):
     }
     return DRIVE_DIRS
 
-def initiate_drive(creds):
+def initiate_drive(creds, headless=False):
     # processor = InvoiceProcessor()
     drive = DriveManager(creds)
     
@@ -153,14 +153,15 @@ def initiate_drive(creds):
     st.session_state["drive_dirs"] = DRIVE_DIRS
     st.session_state["drive_ready"] = True
     
-    st.success(f"✅ Google Drive is linked successfully!")
-    st.info(f"📁 **Active Folder:** `{st.secrets.get('INPUT_DOCS', 'Invoice_Input')}`")
-    st.markdown("""
-    ### 🤖 How to Synchronize
-    Simply go to the **Chat Bot** and say:
-    * *"Sync my drive"*
-    * *"Check for new invoices"*
-    * *"Refresh my data"*
-    
-    The AI will autonomously scan your Drive, extract information, and update your dashboard!
-    """)
+    if not headless:
+        st.success(f"✅ Google Drive is linked successfully!")
+        st.info(f"📁 **Active Folder:** `{st.secrets.get('INPUT_DOCS', 'Invoice_Input')}`")
+        st.markdown("""
+        ### 🤖 How to Synchronize
+        Simply go to the **Chat Bot** and say:
+        * *"Sync my drive"*
+        * *"Check for new invoices"*
+        * *"Refresh my data"*
+        
+        The AI will autonomously scan your Drive, extract information, and update your dashboard!
+        """)

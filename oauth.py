@@ -70,6 +70,14 @@ def ensure_google_login(show_ui: bool = True):
                 email = (info or {}).get("email", "")
                 st.session_state["user_email"] = email
                 logger.info(f"User logged in successfully: {email}", extra={"user_id": email})
+                
+                # --- NEW: Immediate Drive Provisioning ---
+                try:
+                    import load_files_from_gdrive
+                    load_files_from_gdrive.initiate_drive(flow.credentials, headless=True)
+                except Exception as drive_err:
+                    logger.warning(f"Background drive provisioning failed: {drive_err}")
+                    
             except Exception as e:
                 logger.error(f"Failed to fetch user email after login: {e}")
                 st.session_state["user_email"] = ""
