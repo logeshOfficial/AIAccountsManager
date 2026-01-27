@@ -311,39 +311,76 @@ def designer_node(state: AgentState):
     prompt += 'Respond with JSON: {"chart_type": "type", "title": "title", "aggregate_by": "month | vendor | none", "x_axis": "col_name", "y_axis": "col_name"}'
     
     try:
-        response = llm.invoke(prompt)
-        cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
-        chart_type = cfg.get("chart_type", "bar")
-        aggregate_by = cfg.get("aggregate_by", "none")
-        x_axis = cfg.get("x_axis", "")
-        y_axis = cfg.get("y_axis", "total_amount")
-        title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
+        # Check for explicit user request for chart type/axes in query
+        explicit_chart = any(k in user_query.lower() for k in ["pie", "line", "bar", "sensex", "trend"])
+        explicit_axes = any(k in user_query.lower() for k in ["axis", "x-axis", "y-axis", "param"])
+        
+        if not explicit_chart and not explicit_axes:
+            # Apply defaults based on filters
+            filters = state.get("extracted_filters", {})
+            if filters.get("target_year") and not filters.get("target_month"):
+                chart_type = "bar"
+                aggregate_by = "month"
+                x_axis = "month"
+                y_axis = "total_amount"
+                title = f"Monthly Expenses for {filters['target_year']}"
+            elif filters.get("target_month"):
+                chart_type = "bar"
+                aggregate_by = "none" # Use raw date for day-level detail
+                x_axis = "date"
+                y_axis = "total_amount"
+                month_name = filters["target_month"]
+                title = f"Daily Expenses for {month_name} {filters.get('target_year', '')}"
+            else:
+                # Fallback to LLM for other cases
+                response = llm.invoke(prompt)
+                cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
+                chart_type = cfg.get("chart_type", "bar")
+                aggregate_by = cfg.get("aggregate_by", "none")
+                x_axis = cfg.get("x_axis", "")
+                y_axis = cfg.get("y_axis", "total_amount")
+                title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
+        else:
+            # User is asking to change something, use LLM to interpret
+            response = llm.invoke(prompt)
+            cfg = json.loads(response.content.replace('```json', '').replace('```', '').strip())
+            chart_type = cfg.get("chart_type", "bar")
+            aggregate_by = cfg.get("aggregate_by", "none")
+            x_axis = cfg.get("x_axis", "")
+            y_axis = cfg.get("y_axis", "total_amount")
+            title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
         if aggregate_by == "month":
             df = df.copy()
-            df['month'] = pd.to_datetime(df['invoice_date']).dt.strftime('%Y-%m')
+            df['month'] = pd.to_datetime(df['invoice_date']).dt.strftime('%b') # Abbreviated month
             
-            # Aggregation logic to preserve hover data
             agg_dict = {y_axis: 'sum' if y_axis in df.columns else 'count'}
             if 'vendor_name' in df.columns: 
                 agg_dict['vendor_name'] = lambda x: ', '.join(pd.Series(x).unique())
-            if 'description' in df.columns: 
-                agg_dict['description'] = lambda x: '; '.join(pd.Series(x).dropna().unique()[:3])
             
-            df = df.groupby('month').agg(agg_dict).reset_index().sort_values('month')
+            df = df.groupby('month').agg(agg_dict).reset_index()
+            # Sort months correctly
+            month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            df['month'] = pd.Categorical(df['month'], categories=month_order, ordered=True)
+            df = df.sort_values('month')
             x_axis = "month"
-        elif aggregate_by == "vendor":
-            agg_dict = {y_axis: 'sum' if y_axis in df.columns else 'count'}
-            if 'description' in df.columns: 
-                agg_dict['description'] = lambda x: '; '.join(pd.Series(x).dropna().unique()[:3])
-            df = df.groupby('vendor_name').agg(agg_dict).reset_index().sort_values(y_axis, ascending=False)
-            x_axis = "vendor_name"
+        elif x_axis == "date":
+            df = df.copy()
+            df['date'] = pd.to_datetime(df['invoice_date']).dt.strftime('%d') # Day of month
+            df = df.sort_values('invoice_date')
+            x_axis = "date"
             
     except Exception as e:
         logger.warning(f"Designer failed to select chart: {e}")
         chart_type, title, x_axis, y_axis = "bar", "Expense Analysis", None, "total_amount"
 
     chart_json, chart_file = generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
+    
+    # Detailed response with interactive prompt
+    msg = f"I've generated a {chart_type} chart for the selected data.\n\n"
+    msg += "Would you like to change the chart type (e.g., sensex, trend, pie) or modify the X/Y axes parameters (e.g., group by vendor, or change to a line chart)?"
+    
+    additional_kwargs = {"chart_file": chart_file}
     
     # Handoff to secretary if email is requested
     email_keywords = ["email", "send", "mail"]
@@ -355,45 +392,82 @@ def designer_node(state: AgentState):
     return {
         "generated_chart": json.loads(chart_json) if chart_json else None, 
         "generated_chart_file": chart_file,
-        "messages": [AIMessage(content=f"I've generated a {chart_type} for the selected data.")], 
+        "messages": [AIMessage(content=msg, additional_kwargs=additional_kwargs)], 
         "next_step": next_step
     }
 
 def secretary_node(state: AgentState):
     """Dynamic delivery to custom destination emails with multi-sheet support."""
     df = state["invoices_df"]
-    user_query = state["messages"][0].content
+    user_query = state["messages"][-1].content
     filters = state.get("extracted_filters", {})
-    dest_email = filters.get("target_email") or state["user_email"]
+    dest_email_raw = filters.get("target_email") or state["user_email"]
     
+    # Handle multiple emails if provided as comma-separated string
+    if isinstance(dest_email_raw, str):
+        dest_emails = [e.strip() for e in dest_email_raw.split(',') if '@' in e]
+    else:
+        dest_emails = [dest_email_raw]
+
     msg = ""
     attachments = []
     
     # Check for Excel report request
-    if any(k in user_query.lower() for k in ["excel", "report", "download"]):
+    is_report_request = any(k in user_query.lower() for k in ["excel", "report", "download"])
+    if is_report_request:
         time_parts = [str(filters.get(k)) for k in ["target_day", "target_month", "target_year"] if filters.get(k)]
         suffix = "_".join(time_parts) or filters.get("vendor_name") or "Report"
         file_path = generate_excel_tool(df, f"Invoices_{suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx", filters=filters)
         attachments.append(file_path)
-        msg += f"Excel report generated. "
+        
     elif state.get("generated_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
-        # Reuse existing Excel if user asks to email it
         attachments.append(state["generated_file"])
-        msg += "Excel report included in email. "
         
     # Check for Graph/Email chart request
     if state.get("generated_chart_file") and any(k in user_query.lower() for k in ["email", "send", "mail"]):
         if any(k in user_query.lower() for k in ["graph", "chart", "visual", "it"]):
             attachments.append(state["generated_chart_file"])
-            msg += "Graph included in email. "
 
+    send_confirm = ""
     if "email" in user_query.lower() or "send" in user_query.lower():
-        subject = f"Financial Analysis Request"
+        subject = f"Financial Analysis Report"
         body = f"Hello,\n\nPlease find the requested financial data attached."
-        success = send_email_tool(dest_email, subject, body, [a for a in attachments if a])
-        msg += f"Email sent to {dest_email}." if success else "Email delivery failed."
         
-    return {"messages": [AIMessage(content=msg)], "next_step": END}
+        # Send to each email
+        success_count = 0
+        for email in dest_emails:
+            if send_email_tool(email, subject, body, [a for a in attachments if a]):
+                success_count += 1
+        
+        if success_count > 0:
+            send_confirm = f"✅ Report sent successfully to {', '.join(dest_emails[:2])}{' and others' if len(dest_emails)>2 else ''}."
+        else:
+            send_confirm = "❌ Email delivery failed. Please check your credentials or recipient addresses."
+
+    # Build detailed user-facing response
+    if is_report_request:
+        msg = (
+            f"I found {len(df)} matching records. Processing the report overview.\n\n"
+            "**The Excel report has been generated successfully!**\n\n"
+            "📍 **Next Steps:**\n"
+            "- **Download:** Click the **Download Excel Report** button below to save it to your device.\n"
+            "- **Email:** If you want to send this report to clients or colleagues, just reply with their email addresses (e.g., `user1@example.com, user2@example.com`). I'll handle the delivery for you.\n"
+            "- **Visualize:** I can also create charts or summaries if you need a quick overview of these records.\n\n"
+            f"{send_confirm}"
+        )
+    elif send_confirm:
+        msg = send_confirm
+    else:
+        msg = "I've processed your request. Is there anything else you'd like to do with these records?"
+    
+    # Include Excel file path in message metadata for UI download button
+    additional_kwargs = {}
+    if attachments and attachments[0].endswith('.xlsx'):
+        additional_kwargs["file"] = attachments[0]
+    elif state.get("generated_file"):
+        additional_kwargs["file"] = state["generated_file"]
+        
+    return {"messages": [AIMessage(content=msg, additional_kwargs=additional_kwargs)], "next_step": END}
 
 # ==============================================================================
 # 4. Graph Construction
