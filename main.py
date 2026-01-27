@@ -89,7 +89,7 @@ if view == "home":
             
         st.write("### 📄 Recent Activity")
         cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description"]
-        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width=None)
+        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")
     else:
         st.info("No invoices found in the system yet.")
         st.caption("💡 You can sync your data directly from the **Chat Bot** by saying 'sync my drive'.")
