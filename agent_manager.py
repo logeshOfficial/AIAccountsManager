@@ -39,14 +39,18 @@ class AgentState(TypedDict):
 def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str = None, y: str = "total_amount"):
     """Generates a Plotly chart based on the data."""
     try:
-        # Default X to 'month' if it exists, else use the first column or 'vendor_name'
-        if not x:
+        # Default X to 'month' if it exists, else use 'vendor_name' or first column
+        if not x or (isinstance(x, str) and x.lower() == "none"):
             if "month" in data.columns:
                 x = "month"
             elif "vendor_name" in data.columns:
                 x = "vendor_name"
             else:
                 x = data.columns[0]
+        
+        # Sanitize Y axis string
+        if not y or (isinstance(y, str) and y.lower() == "none"):
+            y = "total_amount"
         
         # Determine available hover columns
         hover_cols = [c for c in ["vendor_name", "description"] if c in data.columns]
@@ -336,7 +340,7 @@ def validator_node(state: AgentState):
     evidence_found = state.get("evidence_found", False)
     
     # List of intent keywords that require evidence
-    data_intents = ["graph", "chart", "visual", "excel", "report", "download", "send", "email", "how much", "total spent"]
+    data_intents = ["graph", "chart", "visual", "excel", "report", "download", "send", "email", "how much", "total spent", "pie", "sensex", "bars", "trend"]
     is_data_query = any(k in user_query for k in data_intents)
     
     logger.info(f"Validator Node: Data Query={is_data_query}, Evidence Found={evidence_found}")
@@ -425,12 +429,17 @@ def designer_node(state: AgentState):
             cfg = extract_json_from_text(response.content)
             chart_type = explicit_chart_type or cfg.get("chart_type", "bar")
             aggregate_by = cfg.get("aggregate_by", "none")
-            x_axis = cfg.get("x_axis", "")
+            x_axis = cfg.get("x_axis", "none")
             y_axis = cfg.get("y_axis", "total_amount")
             
             # --- Column Sanitization ---
+            if x_axis and str(x_axis).lower() == "none":
+                x_axis = None
+            if y_axis and str(y_axis).lower() == "none":
+                y_axis = "total_amount"
+                
             col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
-            if y_axis not in df.columns and y_axis.lower() in col_map:
+            if y_axis not in df.columns and y_axis and y_axis.lower() in col_map:
                 y_axis = col_map[y_axis.lower()]
             if y_axis not in df.columns:
                 y_axis = "total_amount"
