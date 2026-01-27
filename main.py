@@ -46,15 +46,15 @@ if is_admin:
 st.sidebar.markdown("---")
 with st.sidebar.expander("❓ Help & Guide"):
     st.markdown("""
-    **1. Login**: Sign in with Google to access your data.
+    **1. Authenticate**: Sign in with Google to securely link your Drive.
     
-    **2. Sync Data**: Go to **Drive_Manager** and click "Start Processing" to import invoices from Drive.
+    **2. Instant Provision**: Your folders are created automatically on login. Just drop your PDFs into `Input_docs` in Drive.
     
-    **3. Analyze**: Go to **Chat_Bot** and ask questions like:
-    - *"Total spent in 2024?"*
-    - *"Show grocery invoices"*
-    
-    **4. Admin**: Admins can view logs below.
+    **3. Converse & Automate**: Head to **Chat_Bot** and just talk:
+    - *"Sync my drive"* (Autonomous data retrieval)
+    - *"Total spent in 2024?"* (Granular investigation)
+    - *"Visualize my grocery bills as a pie chart"* (Intelligent design)
+    - *"Email the 2025 yearly report to finance"* (Professional delivery)
     """)
 
 if view == "home":
@@ -91,8 +91,16 @@ if view == "home":
         cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description"]
         st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")
     else:
-        st.info("No invoices found in the system yet.")
-        st.caption("💡 You can sync your data directly from the **Chat Bot** by saying 'sync my drive'.")
+        st.info("👋 **Welcome to your New Intelligence Suite!**")
+        st.markdown(f"""
+        ### 🚀 Final Step: Upload your Invoices
+        To start analyzing your data, please follow these simple steps:
+        1. **Go to Google Drive.**
+        2. Locate and open the folder: `{st.secrets.get('INPUT_DOCS', 'Input_Docs')}`.
+        3. **Drag and Drop** your PDF invoices into that folder.
+        4. Return here to the **Chat Bot** and say: *"Sync my drive"*.
+        """)
+        st.warning(f"⚠️ **Note:** The folder `{st.secrets.get('INPUT_DOCS', 'Input_Docs')}` was automatically created for you upon login.")
     
 elif view == "chat":
     chat_bot.run_chat_interface()
