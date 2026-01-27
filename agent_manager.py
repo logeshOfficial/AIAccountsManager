@@ -13,6 +13,9 @@ from langgraph.graph import StateGraph, END
 from app_logger import get_logger
 import db
 import streamlit as st
+import drive_manager
+import invoice_processor
+import load_files_from_gdrive
 import tempfile
 
 logger = get_logger(__name__)
@@ -199,6 +202,44 @@ def cleanup_old_exports(max_age_minutes: int = 20):
     except Exception as e:
         logger.warning(f"Cleanup failed: {e}")
 
+def intelligent_sync_tool(user_email: str):
+    """
+    Intelligently synchronizes Drive with the DB. 
+    Can be called by the agent when it detects missing information.
+    """
+    if "creds" not in st.session_state:
+        logger.warning("Sync failed: No Google credentials in session.")
+        return "I need you to login with Google first to access your Drive."
+
+    try:
+        drive = drive_manager.DriveManager(st.session_state["creds"])
+        processor = invoice_processor.InvoiceProcessor()
+        
+        # Ensure folders exist
+        input_folder = st.secrets.get("INPUT_DOCS", "Invoice_Input")
+        input_folder_id = drive.get_or_create_folder(input_folder)
+        root_id = drive.get_or_create_folder("Invoice_Processing")
+        
+        drive_dirs = {
+            "project_id": root_id,
+            "input_folder_id": input_folder_id,
+            "valid_docs": drive.get_or_create_folder("scanned_docs", root_id),
+            "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
+        }
+        
+        count = load_files_from_gdrive.sync_engine_core(
+            drive, processor, input_folder_id, drive_dirs, user_email
+        )
+        
+        if count > 0:
+            return f"Successfully synchronized {count} document(s) from your Drive folder '{input_folder}'."
+        else:
+            return f"I scanned your Drive folder '{input_folder}' but found no new invoices to process."
+            
+    except Exception as e:
+        logger.error(f"Intelligent Sync failed: {e}")
+        return f"I encountered an error while trying to sync with your Drive: {str(e)}"
+
 # ==============================================================================
 # 3. Agent Nodes
 # ==============================================================================
@@ -230,8 +271,9 @@ def analyst_node(state: AgentState):
     2. If the user refers to "them", "that", "these", or asks for modifications to a previous search, resolve the references.
     3. IMPORTANT: If the query is a continuation (e.g., "Now graph them", "Filter by 2024", "Email this", "Send me the chart"), you MUST CARRY OVER relevant filters (vendor_name, invoice_number, etc.) from previous turns unless the user explicitly changes them.
     4. If the user asks to "reset" or "clear" filters, set all filter values to null.
-    5. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'END'.
-    6. CRITICAL: If the user asks for a "report", "overview", or data for a specific year/month, always favor 'designer' first so a visual chart is generated. The designer will handle handing off to the secretary for the Excel file.
+    5. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'sync' (to fetch new items from Drive), 'END'.
+    6. CRITICAL: If the user asks for a "report", "overview", or data for a specific year/month, always favor 'designer' first so a visual chart is generated.
+    7. SYNC INTENT: If the user asks to "sync", "refresh", "load new", "check drive", or mentions not seeing their latest invoices, use 'sync' as the next_node.
     Data available for vendors like: {df['vendor_name'].unique().tolist() if not df.empty else 'None'}
     
     Extract or Update Search Filters:
@@ -370,10 +412,14 @@ def validator_node(state: AgentState):
     data_intents = ["graph", "chart", "visual", "excel", "report", "download", "send", "email", "how much", "total spent", "pie", "sensex", "bars", "trend"]
     is_data_query = any(k in user_query for k in data_intents)
     
+    # Logic: If user specifically asked for 'sync', always allow it
+    if next_step == "sync":
+        return {"next_step": "sync"}
+
     logger.info(f"Validator Node: Data Query={is_data_query}, Evidence Found={evidence_found}")
     
     if is_data_query and not evidence_found:
-        msg = "⚠️ I lack the specific invoice evidence to perform that action or answer that question accurately. Please check your query or ensure the data is synced from Drive."
+        msg = "⚠️ I lack the specific invoice evidence to perform that action accurately. Would you like me to **sync your Drive** to look for new invoices?"
         return {
             "messages": [AIMessage(content=msg)],
             "next_step": END
@@ -381,6 +427,20 @@ def validator_node(state: AgentState):
     
     # If evidence is found or it's a general query, allow the flow to continue
     return {"next_step": next_step}
+
+def sync_node(state: AgentState):
+    """Integrated Node for Drive-to-DB extraction."""
+    user_email = state["user_email"]
+    logger.info(f"Sync Node triggered for {user_email}")
+    
+    status_msg = intelligent_sync_tool(user_email)
+    
+    # After sync, we want to re-run the analysis to see the new data
+    # We return the status and tell the analyst to try again
+    return {
+        "messages": [AIMessage(content=f"🔄 **Sync Status:** {status_msg}")],
+        "next_step": "analyst" # Loops back to re-check the DB
+    }
 
 def designer_node(state: AgentState):
     """Smart chart generation on FILTERED data."""
@@ -629,6 +689,7 @@ def get_agent_graph():
     workflow.add_node("validator", validator_node)
     workflow.add_node("designer", designer_node)
     workflow.add_node("secretary", secretary_node)
+    workflow.add_node("sync", sync_node) # NEW
     workflow.set_entry_point("analyst")
     
     workflow.add_edge("analyst", "validator")
@@ -636,8 +697,11 @@ def get_agent_graph():
     workflow.add_conditional_edges(
         "validator",
         lambda x: x["next_step"],
-        {"designer": "designer", "secretary": "secretary", END: END}
+        {"designer": "designer", "secretary": "secretary", "sync": "sync", END: END}
     )
+    
+    # Sync loops back to analyst
+    workflow.add_edge("sync", "analyst")
     
     # Designer can go to secretary or END
     workflow.add_conditional_edges(

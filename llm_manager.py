@@ -1,6 +1,8 @@
 import streamlit as st
-import ai_models
 import json
+from openai import OpenAI
+from google import genai
+from groq import Groq
 import re
 from typing import Tuple, Dict, Optional, Any
 from google.genai import types
@@ -27,10 +29,9 @@ def get_primary_client():
         return None
         
     try:
-        return ai_models.initiate_huggingface_model(api_key=api_key, base_url=base_url)
+        return OpenAI(api_key=api_key, base_url=base_url)
     except Exception as e:
         logger.error(f"Failed to initialize Primary Client: {e}")
-        st.error(f"Failed to initialize Primary Client: {e}")
         return None
 
 @st.cache_resource
@@ -42,8 +43,8 @@ def get_groq_client():
         return None
         
     try:
-        return ai_models.initiate_groq_model(api_key=api_key)
-    except Exception as e:
+        return Groq(api_key=api_key)
+    except Exception:
         return None
 
 @st.cache_resource
@@ -53,7 +54,7 @@ def get_fallback_client():
     if not api_key:
         return None
     try:
-        return ai_models.initiate_gemini_model(api_key=api_key)
+        return genai.Client(api_key=api_key)
     except Exception:
         return None
 

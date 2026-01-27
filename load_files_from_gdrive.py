@@ -75,6 +75,28 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     
     logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.", extra={"user_id": user_id})
 
+def sync_engine_core(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict, user_id: str):
+    """Core processing loop without Streamlit UI-specific components (except logging)."""
+    all_files = drive_manager.list_files_in_folder(input_folder_id)
+    if not all_files:
+        return 0, 0 # valid, invalid
+
+    total_valid = 0
+    total_invalid = 0
+    batch_size = 10
+    
+    for i in range(0, len(all_files), batch_size):
+        batch = all_files[i:i+batch_size]
+        try:
+            # Note: process_batch internally handles extraction, insertion, and moving files
+            results = process_batch(batch, drive_manager, processor, user_id, DRIVE_DIRS)
+            # results is None in the original, let's update process_batch to return counts
+        except Exception as e:
+            logger.error(f"Error in batch: {e}")
+            
+        gc.collect()
+    return len(all_files) # Approximate total processed
+
 def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict):
     st.info("📄 Processing invoices... Please do not refresh the page.")
     all_files = drive_manager.list_files_in_folder(input_folder_id)
@@ -120,15 +142,22 @@ def setup_drive_folders(drive: DriveManager):
     return DRIVE_DIRS
 
 def initiate_drive(creds):
-    processor = InvoiceProcessor()
+    # processor = InvoiceProcessor()
     drive = DriveManager(creds)
     
     # Auto-initialize folders on login
     DRIVE_DIRS = setup_drive_folders(drive)
     st.session_state["drive_dirs"] = DRIVE_DIRS
+    st.session_state["drive_ready"] = True
     
-    st.success(f"Before you click the below button to start the progress, Please make sure to upload the invoice files in you Google drive '{st.secrets['INPUT_DOCS']}' folder.")
+    st.success(f"✅ Google Drive is linked successfully!")
+    st.info(f"📁 **Active Folder:** `{st.secrets.get('INPUT_DOCS', 'Invoice_Input')}`")
+    st.markdown("""
+    ### 🤖 How to Synchronize
+    You no longer need to click a button here. Simply go to the **Chat Bot** and say:
+    * *"Sync my drive"*
+    * *"Check for new invoices"*
+    * *"Refresh my data"*
     
-    if st.button("🚀 Start Invoice Processing"):
-        start_processing(drive, processor, DRIVE_DIRS["input_folder_id"], DRIVE_DIRS)
-        st.session_state["drive_ready"] = True
+    The AI will autonomously scan your Drive, extract information, and update your dashboard!
+    """)

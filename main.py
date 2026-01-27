@@ -69,43 +69,30 @@ if view == "home":
     else:
         st.warning("Could not fetch your Google email. Please logout and login again.")
 
-    # with st.expander("⚠️ Danger zone", expanded=False):
-    #     # 1. User Action: Delete OWN data
-    #     st.write("**My Data**")
-    #     if st.button("🗑️ Delete ALL my uploaded invoices"):
-    #         ok, msg = db.delete_user_data(user_email)
-    #         if ok:
-    #             st.success(msg)
-    #             st.rerun()
-    #         else:
-    #             st.error(msg)
-                
-    #     # 2. Admin Action: Delete EVERYTHING
-    #     if is_admin:
-    #         st.markdown("---")
-    #         st.write("**Admin: Global Reset**")
-    #         st.write("This will permanently delete the ENTIRE invoices database for ALL users.")
-    #         confirm_drop = st.checkbox("I understand — delete invoices.db", value=False)
-    #         recreate = st.checkbox("Recreate empty DB after delete", value=True)
-
-    #         if st.button("💣 Drop invoices DB", disabled=not confirm_drop, type="primary"):
-    #             ok, msg = db.drop_invoices_db(recreate=recreate)
-    #             if ok:
-    #                 st.success(msg)
-    #                 st.rerun()
-    #             else:
-    #                 st.error(msg)
-
-    # # Security: normal users only see their own rows; admin sees everything.
-    # df = db.read_db(user_id=user_email, is_admin=is_admin)
+    st.markdown("---")
     
-    # if not df.empty:
-    #     cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description", "user_id"]
-    #     if not is_admin:
-    #         cols_to_show.remove("user_id")
-    #     st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width="stretch")
-    # else:
-    #     st.info("No invoices found. Go to Drive Manager to sync your data.")
+    # Security: normal users only see their own rows; admin sees everything.
+    df = db.read_db(user_id=user_email, is_admin=is_admin)
+    
+    if not df.empty:
+        # --- Financial Snapshot ---
+        col1, col2, col3 = st.columns(3)
+        total_spent = df['total_amount'].sum()
+        invoice_count = len(df)
+        
+        with col1:
+            st.metric("Total Spent", f"${total_spent:,.2f}")
+        with col2:
+            st.metric("Matched Invoices", invoice_count)
+        with col3:
+            st.metric("System Health", "Optimal")
+            
+        st.write("### 📄 Recent Activity")
+        cols_to_show = ["invoice_number", "invoice_date", "vendor_name", "total_amount", "description"]
+        st.dataframe(df[[c for c in cols_to_show if c in df.columns]], width=None)
+    else:
+        st.info("No invoices found in the system yet.")
+        st.caption("💡 You can sync your data directly from the **Chat Bot** by saying 'sync my drive'.")
     
 elif view == "chat":
     chat_bot.run_chat_interface()

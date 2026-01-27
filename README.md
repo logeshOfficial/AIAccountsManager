@@ -8,8 +8,9 @@ An elite, **multi-agent financial ecosystem** that automates the entire lifecycl
 
 ### 🤖 Multi-Agent Framework (LangGraph)
 The system leverages a sophisticated DAG-based workflow to resolve complex financial queries:
-- **🧠 Analyst Agent**: Conducts granular data investigation, resolves conversational references, and provides deep natural language summaries of financial health.
-- **🎨 Designer Agent**: Intelligently selects the optimal visualization (Pie, Bar, Line, or "Sensex" Trends) based on data density and timeframe context.
+- **🧠 Analyst Agent**: Conducts granular data investigation, resolves conversational references, and provides deep natural language summaries.
+- **🔄 Sync Node**: **NEW!** Autonomous Google Drive synchronization directly within the chat flow.
+- **🎨 Designer Agent**: Intelligently selects the optimal visualization (Pie, Bar, Line, or "Sensex" Trends).
 - **💼 Secretary Agent**: Orchestrates professional Excel generation and secure email delivery to stakeholders.
 
 ### 📄 High-Efficiency PDF Extraction
