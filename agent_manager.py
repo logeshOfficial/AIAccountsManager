@@ -176,6 +176,7 @@ def analyst_node(state: AgentState):
     3. IMPORTANT: If the query is a continuation (e.g., "Now graph them", "Filter by 2024", "Email this", "Send me the chart"), you MUST CARRY OVER relevant filters (vendor_name, invoice_number, etc.) from previous turns unless the user explicitly changes them.
     4. If the user asks to "reset" or "clear" filters, set all filter values to null.
     5. Available nodes: 'designer' (for visuals/charts), 'secretary' (for reports/emails), 'END'.
+    6. CRITICAL: If the user asks for a "report", "overview", or data for a specific year/month, always favor 'designer' first so a visual chart is generated. The designer will handle handing off to the secretary for the Excel file.
     Data available for vendors like: {df['vendor_name'].unique().tolist() if not df.empty else 'None'}
     
     Extract or Update Search Filters:
@@ -262,9 +263,12 @@ def analyst_node(state: AgentState):
         summary = "I couldn't find any invoices matching those specific details in your records."
         evidence_found = False
         
+    # Only show analyst summary if we aren't handing off to a visual/report node
+    display_summary = summary if next_node == END else ""
+    
     return {
         "invoices_df": df, 
-        "messages": [AIMessage(content=summary)], 
+        "messages": [AIMessage(content=display_summary)], 
         "next_step": next_node,
         "extracted_filters": filters,
         "evidence_found": evidence_found
@@ -302,7 +306,13 @@ def designer_node(state: AgentState):
     if df.empty:
         return {"messages": [AIMessage(content="No data found to visualize.")], "next_step": END}
         
-    user_query = state["messages"][-1].content
+    # Find the latest human message for intent check
+    user_query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            user_query = msg.content
+            break
+            
     llm = get_llm()
     prompt = f"User asked: '{user_query}'. Which chart ('bar', 'pie', 'line', 'sensex') is best for {len(df)} rows? "
     prompt += 'IMPORTANT: If the user explicitly asks for a specific type (e.g., "pie" or "bar"), you MUST use that. '
@@ -382,9 +392,9 @@ def designer_node(state: AgentState):
     
     additional_kwargs = {"chart_file": chart_file}
     
-    # Handoff to secretary if email is requested
-    email_keywords = ["email", "send", "mail"]
-    if any(k in user_query.lower() for k in email_keywords):
+    # Handoff to secretary if email or report is requested
+    handoff_keywords = ["email", "send", "mail", "report", "excel", "download", "delivery"]
+    if any(k in user_query.lower() for k in handoff_keywords):
         next_step = "secretary"
     else:
         next_step = END
@@ -399,7 +409,14 @@ def designer_node(state: AgentState):
 def secretary_node(state: AgentState):
     """Dynamic delivery to custom destination emails with multi-sheet support."""
     df = state["invoices_df"]
-    user_query = state["messages"][-1].content
+    
+    # Find the latest human message for intent check
+    user_query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            user_query = msg.content
+            break
+            
     filters = state.get("extracted_filters", {})
     dest_email_raw = filters.get("target_email") or state["user_email"]
     
