@@ -57,9 +57,15 @@ def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str 
             fig = px.pie(data, values=y, names=x, title=title, hover_data=hover_cols)
         elif chart_type == "line" or chart_type == "sensex":
             # "sensex" graph is a line chart with markers
-            fig = px.line(data, x=x, y=y, title=title, markers=True, hover_data=hover_cols)
+            fig = px.line(data, x=x, y=y, title=title, markers=True, hover_data=hover_cols, template="plotly_white")
             if chart_type == "sensex":
-                fig.update_traces(line=dict(width=3, color='royalblue'), marker=dict(size=10, symbol='diamond'))
+                fig.update_traces(line=dict(width=4, color='#1f77b4'), marker=dict(size=12, symbol='diamond-open', line=dict(width=2, color='#1f77b4')))
+                fig.update_layout(
+                    font=dict(family="Verdana, sans-serif", size=14, color="#333"),
+                    title_font=dict(size=20),
+                    xaxis=dict(showgrid=True, gridcolor='lightgrey'),
+                    yaxis=dict(showgrid=True, gridcolor='lightgrey')
+                )
         else:
             return None, None
         
@@ -318,7 +324,14 @@ def validator_node(state: AgentState):
     is sufficient for the requested action.
     """
     df = state["invoices_df"]
-    user_query = state["messages"][0].content.lower()
+    
+    # Find the latest human message for intent check
+    user_query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            user_query = msg.content.lower()
+            break
+            
     next_step = state.get("next_step", END)
     evidence_found = state.get("evidence_found", False)
     
@@ -397,6 +410,14 @@ def designer_node(state: AgentState):
                 aggregate_by = cfg.get("aggregate_by", "none")
                 x_axis = cfg.get("x_axis", "")
                 y_axis = cfg.get("y_axis", "total_amount")
+                
+                # --- Column Sanitization ---
+                col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
+                if y_axis not in df.columns and y_axis.lower() in col_map:
+                    y_axis = col_map[y_axis.lower()]
+                if y_axis not in df.columns:
+                    y_axis = "total_amount"
+                    
                 title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         else:
             # User is asking to change something, use LLM to interpret
@@ -406,6 +427,14 @@ def designer_node(state: AgentState):
             aggregate_by = cfg.get("aggregate_by", "none")
             x_axis = cfg.get("x_axis", "")
             y_axis = cfg.get("y_axis", "total_amount")
+            
+            # --- Column Sanitization ---
+            col_map = {"invoice_amount": "total_amount", "amount": "total_amount", "spent": "total_amount"}
+            if y_axis not in df.columns and y_axis.lower() in col_map:
+                y_axis = col_map[y_axis.lower()]
+            if y_axis not in df.columns:
+                y_axis = "total_amount"
+                
             title = cfg.get("title", f"Analysis: {state['extracted_filters'].get('vendor_name', 'Expenses')}")
         
         if aggregate_by == "month":
@@ -470,11 +499,26 @@ def secretary_node(state: AgentState):
     filters = state.get("extracted_filters", {})
     dest_email_raw = filters.get("target_email") or state["user_email"]
     
+    # Handle "my email" / "me" keywords or fallback to logged-in user
+    if any(k in user_query.lower() for k in ["my email", "email me", "send it to me", "myself"]):
+        dest_email_raw = state["user_email"]
+    
     # Handle multiple emails if provided as comma-separated string
     if isinstance(dest_email_raw, str):
-        dest_emails = [e.strip() for e in dest_email_raw.split(',') if '@' in e]
+        # Extract anything that looks like an email or placeholders
+        potential_emails = [e.strip() for e in dest_email_raw.split(',')]
+        dest_emails = []
+        for e in potential_emails:
+            if '@' in e:
+                dest_emails.append(e)
+            elif e.lower() in ["my", "me", "myself", "my email"]:
+                dest_emails.append(state["user_email"])
+        
+        # Final fallback if send intent is present but no valid emails extracted
+        if not dest_emails and ("email" in user_query.lower() or "send" in user_query.lower()):
+            dest_emails = [state["user_email"]]
     else:
-        dest_emails = [dest_email_raw]
+        dest_emails = [dest_email_raw] if dest_email_raw else [state["user_email"]]
 
     msg = ""
     attachments = []
