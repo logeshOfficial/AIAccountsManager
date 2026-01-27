@@ -34,6 +34,7 @@ class AgentState(TypedDict):
     next_step: str # To guide the graph flow
     extracted_filters: Dict # Search criteria like vendor, year, or invoice #
     evidence_found: bool # Curried RAG flag for validation
+    sync_checkpoint: bool # NEW: Prevents infinite sync loops
 
 # ==============================================================================
 # 2. Tool Implementations
@@ -254,7 +255,13 @@ def intelligent_sync_tool(user_email: str, status_obj=None):
 
 def analyst_node(state: AgentState):
     """Deeply analyzes query, extracts filters, and explains data."""
-    user_query = state["messages"][-1].content
+    # Find the REAL user query (the latest human message)
+    user_query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            user_query = msg.content
+            break
+            
     logger.info(f"Analyst Node: Advanced Analysis for '{user_query}'")
     
     llm = get_agent_llm()
@@ -311,6 +318,13 @@ def analyst_node(state: AgentState):
         decision = json.loads(clean_content)
         
         next_node = decision.get("next_node", END)
+        
+        # --- 🛡️ Loop Prevention ---
+        # If we already synced in this turn, don't allow re-syncing
+        if state.get("sync_checkpoint") and str(next_node).lower() == "sync":
+            logger.warning("Analyst tried to re-trigger sync. Forcing END/Analysis.")
+            next_node = END
+            
         if str(next_node).upper() == "END":
             next_node = END
         filters = decision.get("filters", {})
@@ -449,10 +463,11 @@ def sync_node(state: AgentState):
         status.update(label="✅ Synchronization complete!", state="complete")
     
     # After sync, we want to re-run the analysis to see the new data
-    # We return the status and tell the analyst to try again
+    # We set sync_checkpoint = True to prevent loops
     return {
         "messages": [AIMessage(content=f"🔄 **Sync Status:** {status_msg}")],
-        "next_step": "analyst" # Loops back to re-check the DB
+        "next_step": "analyst", # Loops back to re-check the DB
+        "sync_checkpoint": True
     }
 
 def designer_node(state: AgentState):
@@ -755,6 +770,7 @@ def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = Non
         "user_email": user_email,
         "extracted_filters": last_filters,
         "generated_chart_file": last_chart_file,
-        "generated_file": last_excel_file
+        "generated_file": last_excel_file,
+        "sync_checkpoint": False # Reset for new request
     }
     return app.invoke(inputs)
