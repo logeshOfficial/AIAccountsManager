@@ -250,7 +250,7 @@ def analyst_node(state: AgentState):
         filters = {}
 
     if not df.empty:
-        summary = f"I found {len(df)} matching records. "
+        summary = f"🔍 [V2.0] I found {len(df)} matching records. "
         if filters.get('target_year') and not (filters.get('target_month') or filters.get('target_day')):
             summary += f"Processing yearly overview for {filters['target_year']} (multi-sheet by month)."
         elif filters.get('target_month'):
@@ -387,7 +387,7 @@ def designer_node(state: AgentState):
     chart_json, chart_file = generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
     
     # Detailed response with interactive prompt
-    msg = f"I've generated a {chart_type} chart for the selected data.\n\n"
+    msg = f"📊 [V2.0] I've generated a {chart_type} chart for the selected data.\n\n"
     msg += "Would you like to change the chart type (e.g., sensex, trend, pie) or modify the X/Y axes parameters (e.g., group by vendor, or change to a line chart)?"
     
     additional_kwargs = {"chart_file": chart_file}
@@ -464,7 +464,7 @@ def secretary_node(state: AgentState):
     # Build detailed user-facing response
     if is_report_request:
         msg = (
-            f"I found {len(df)} matching records. Processing the report overview.\n\n"
+            f"📁 [V2.0] Success! I found {len(df)} matching records. Processing the report overview.\n\n"
             "**The Excel report has been generated successfully!**\n\n"
             "📍 **Next Steps:**\n"
             "- **Download:** Click the **Download Excel Report** button below to save it to your device.\n"
