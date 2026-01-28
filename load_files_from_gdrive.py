@@ -76,11 +76,12 @@ def process_batch(batch: List[Dict], drive_manager, processor: InvoiceProcessor,
     logger.info(f"Batch complete: {len(valid_files)} valid, {len(invalid_files)} invalid.", extra={"user_id": user_id})
 
 def sync_engine_core(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict, user_id: str, progress_callback=None):
-    """Core processing loop without Streamlit UI-specific components (except logging)."""
+    """Core processing loop with performance tracking."""
     all_files = drive_manager.list_files_in_folder(input_folder_id)
     if not all_files:
-        return 0
+        return 0, 0
 
+    start_time = time.time()
     total_files = len(all_files)
     batch_size = 10
     
@@ -98,7 +99,10 @@ def sync_engine_core(drive_manager: DriveManager, processor: InvoiceProcessor, i
             logger.error(f"Error in batch {current_batch_num}: {e}")
             
         gc.collect()
-    return total_files
+    
+    end_time = time.time()
+    duration = end_time - start_time
+    return total_files, duration
 
 def start_processing(drive_manager: DriveManager, processor: InvoiceProcessor, input_folder_id: str, DRIVE_DIRS: Dict):
     st.info("📄 Processing invoices... Please do not refresh the page.")

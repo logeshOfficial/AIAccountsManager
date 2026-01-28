@@ -224,20 +224,27 @@ def intelligent_sync_tool(user_email: str, status_obj=None):
             "invalid_docs": drive.get_or_create_folder("invalid_docs", root_id),
         }
         
-        # Define progress callback for UI
         def update_progress(current, total, batch_count):
             if status_obj:
                 msg = f"⏳ Processing batch {current} of {total} ({batch_count} files)..."
                 status_obj.update(label=msg, state="running")
                 logger.info(f"Sync UI Update: {msg}")
 
-        count = load_files_from_gdrive.sync_engine_core(
+        count, duration = load_files_from_gdrive.sync_engine_core(
             drive, processor, input_folder_id, drive_dirs, user_email,
             progress_callback=update_progress
         )
         
         if count > 0:
-            return f"Successfully synchronized {count} document(s) from your Drive folder '{input_folder}'."
+            # --- Performance Metrics ---
+            mins = int(duration // 60)
+            secs = int(duration % 60)
+            time_str = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
+            speed = (count / duration) * 60 if duration > 0 else 0
+            
+            perf_msg = f"Successfully synchronized **{count}** document(s) in **{time_str}**."
+            perf_msg += f"\n📈 **Processing Speed:** {speed:.1f} files/min."
+            return perf_msg
         else:
             return f"I scanned your Drive folder '{input_folder}' but found no new invoices to process."
             

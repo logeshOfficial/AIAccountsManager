@@ -89,30 +89,7 @@ def llm_call(prompt: str) -> Tuple[str, str]:
     Returns: (response_text, model_name)
     """
     
-    # --- Attempt 1: Primary Model ---
-    client = get_primary_client()
-    primary_error = None
-    
-    if client:
-        model_name = st.secrets.get("openai_model", DEFAULT_PRIMARY_MODEL)
-        try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You are a precise financial invoice assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=5000
-            )
-            logger.info(f"LLM Call successful using model: {model_name}")
-            return response.choices[0].message.content.strip(), model_name
-            
-        except Exception as e:
-            logger.warning(f"Primary model failed: {e}")
-            primary_error = e
-            # st.warning(f"Primary model encountered an error: {e}. Attempting fallback to Groq...")
-
-    # --- Attempt 2: Groq Model ---
+    # --- Attempt 1: Groq Model (PRIMARY) ---
     groq_client = get_groq_client()
     groq_error = None
 
@@ -128,12 +105,33 @@ def llm_call(prompt: str) -> Tuple[str, str]:
                 max_tokens=5000
             )
             
-            logger.info(f"LLM Call successful using Groq fallback: {model_name}")
+            logger.info(f"LLM Call successful using Groq (Primary): {model_name}")
             return response.choices[0].message.content.strip(), model_name
         except Exception as e:
-            logger.warning(f"Groq fallback model failed: {e}")
+            logger.warning(f"Groq primary model failed: {e}")
             groq_error = e
-            # st.warning(f"Groq model encountered an error: {e}. Attempting fallback to Gemini...")
+
+    # --- Attempt 2: OpenAI / Primary Model (Fallback) ---
+    client = get_primary_client()
+    primary_error = None
+    
+    if client:
+        model_name = st.secrets.get("openai_model", DEFAULT_PRIMARY_MODEL)
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a precise financial invoice assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=5000
+            )
+            logger.info(f"LLM Call successful using OpenAI fallback: {model_name}")
+            return response.choices[0].message.content.strip(), model_name
+            
+        except Exception as e:
+            logger.warning(f"OpenAI fallback failed: {e}")
+            primary_error = e
 
     # --- Attempt 3: Fallback Model (Gemini) ---
     gemini_client = get_fallback_client()
