@@ -2,7 +2,6 @@ import os
 import io
 import json
 import re
-import streamlit as st
 from typing import Optional, List, Dict
 from googleapiclient.http import MediaIoBaseDownload
 from collections import defaultdict
@@ -139,20 +138,8 @@ class InvoiceProcessor:
             ext = os.path.splitext(name)[1].lower()
             text, error = "", ""
             try:
-                if mime == "application/vnd.google-apps.document":
-                    text = _get_bytes(file_id, True, "text/plain").decode("utf-8")
-                elif mime == "application/vnd.google-apps.spreadsheet":
-                    text = _get_bytes(file_id, True, "text/csv").decode("utf-8")
-                elif ext == ".pdf" or mime == "application/pdf":
+                if ext == ".pdf" or mime == "application/pdf":
                     text = pdf_engine.extract_text_from_pdf(_get_bytes(file_id))
-                elif ext in (".csv", ".xlsx", ".xls"):
-                    import pandas as pd
-                    data = _get_bytes(file_id)
-                    df = pd.read_csv(io.BytesIO(data), dtype=str) if ext == ".csv" else pd.read_excel(io.BytesIO(data), dtype=str)
-                    text = df.fillna("").to_csv(index=False)
-                elif ext in (".png", ".jpg", ".jpeg") or mime.startswith("image/"):
-                    error = "Image extraction (OCR) is currently disabled. PDF and structural documents only."
-                    logger.warning(f"⏩ Doc {idx+1}: {error}")
                 else:
                     text = _get_bytes(file_id).decode("utf-8", errors="ignore")
             except Exception as e:
