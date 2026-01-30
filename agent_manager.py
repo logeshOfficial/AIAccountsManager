@@ -299,6 +299,8 @@ async def analyst_node(state: AgentState):
     - vendor_name: (partial or exact)
     - invoice_number: (alphanumeric identifier)
     - target_year: (4-digit year like '2025')
+    - start_year: (If a range is specified, e.g., 'from 2012')
+    - end_year: (If a range is specified, e.g., 'to 2016')
     - target_month: (month name or number 1-12)
     - target_day: (day of the month 1-31)
     - target_email: (email address to send reports to)
@@ -310,6 +312,8 @@ async def analyst_node(state: AgentState):
         "vendor_name": "value or previous", 
         "invoice_number": "value or previous", 
         "target_year": "value or previous", 
+        "start_year": "value",
+        "end_year": "value",
         "target_month": "value or previous", 
         "target_day": "value or previous", 
         "target_email": "value or previous"
@@ -343,10 +347,26 @@ async def analyst_node(state: AgentState):
         if filters.get("invoice_number"):
             df = df[df['invoice_number'].astype(str).str.contains(str(filters['invoice_number']))]
             
-        if not df.empty and (filters.get("target_year") or filters.get("target_month") or filters.get("target_day")):
+        if not df.empty and (filters.get("target_year") or filters.get("start_year") or filters.get("end_year") or filters.get("target_month") or filters.get("target_day")):
             df['temp_date'] = pd.to_datetime(df['invoice_date'], errors='coerce')
+            
+            # 1. Exact Year Match
             if filters.get("target_year"):
                 df = df[df['temp_date'].dt.year.astype(str) == str(filters['target_year'])]
+            
+            # 2. Date Range Logic (Year-based)
+            if filters.get("start_year"):
+                df = df[df['temp_date'].dt.year >= int(filters["start_year"])]
+            if filters.get("end_year"):
+                # "Till" implies inclusive usually, so we ensure it includes the end year
+                upper_bound = int(filters["end_year"])
+                # Logic check: if "till" current year, we might not need an upper bound, but let's be safe
+                if "till" in user_query.lower() and not filters.get("end_year"):
+                     # If user said 'till' but didn't specify a year (unlikely with prompt), we default to now
+                     pass
+                else:
+                    df = df[df['temp_date'].dt.year <= upper_bound]
+
             if filters.get("target_month"):
                 month = filters["target_month"]
                 if isinstance(month, str) and not month.isdigit():
