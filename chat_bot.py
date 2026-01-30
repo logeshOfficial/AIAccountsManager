@@ -1,3 +1,4 @@
+import asyncio
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -119,7 +120,12 @@ def run_chat_interface():
         # 6. Run Agent
         with st.spinner("🤖 Agent is thinking..."):
             prev_msg_count = len(st.session_state.messages)
-            result = agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1])
+            try:
+                result = asyncio.run(agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1]))
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(agent_manager.run_agent(query, user_email, history=st.session_state.messages[:-1]))
             
             # --- 🤖 A. Consolidate Assistant Responses ---
             # Instead of multiple bubbles, we merge everything into one clean response

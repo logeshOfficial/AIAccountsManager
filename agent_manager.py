@@ -39,8 +39,9 @@ class AgentState(TypedDict):
 # ==============================================================================
 # 2. Tool Implementations
 # ==============================================================================
+import asyncio
 
-def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str = None, y: str = "total_amount"):
+async def generate_chart_tool(data: pd.DataFrame, chart_type: str, title: str, x: str = None, y: str = "total_amount"):
     """Generates a Plotly chart based on the data."""
     try:
         # Default X to 'month' if it exists, else use 'vendor_name' or first column
@@ -182,7 +183,7 @@ def extract_json_from_text(text: str) -> Dict:
                 pass
     return {}
 
-def cleanup_old_exports(max_age_minutes: int = 20):
+async def cleanup_old_exports(max_age_minutes: int = 20):
     """Deletes files in the exports/ directory older than specified minutes."""
     try:
         if not os.path.exists("exports"):
@@ -199,7 +200,7 @@ def cleanup_old_exports(max_age_minutes: int = 20):
     except Exception as e:
         logger.warning(f"Cleanup failed: {e}")
 
-def intelligent_sync_tool(user_email: str, status_obj=None):
+async def intelligent_sync_tool(user_email: str, status_obj=None):
     """
     Intelligently synchronizes Drive with the DB. 
     Can be called by the agent when it detects missing information.
@@ -256,7 +257,7 @@ def intelligent_sync_tool(user_email: str, status_obj=None):
 # 3. Agent Nodes
 # ==============================================================================
 
-def analyst_node(state: AgentState):
+async def analyst_node(state: AgentState):
     """Deeply analyzes query, extracts filters, and explains data."""
     # Find the REAL user query (the latest human message)
     user_query = ""
@@ -315,8 +316,10 @@ def analyst_node(state: AgentState):
       }}
     }}"""
     
+    }}"""
+    
     try:
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         clean_content = response.content.replace('```json', '').replace('```', '').strip()
         decision = json.loads(clean_content)
         
@@ -418,7 +421,7 @@ def analyst_node(state: AgentState):
         "evidence_found": evidence_found
     }
 
-def validator_node(state: AgentState):
+async def validator_node(state: AgentState):
     """
     Curried RAG Guardrail: Validates if the retrieved data (evidence) 
     is sufficient for the requested action.
@@ -455,14 +458,14 @@ def validator_node(state: AgentState):
     # If evidence is found or it's a general query, allow the flow to continue
     return {"next_step": next_step}
 
-def sync_node(state: AgentState):
+async def sync_node(state: AgentState):
     """Integrated Node for Drive-to-DB extraction with real-time UI feedback."""
     user_email = state["user_email"]
     logger.info(f"Sync Node triggered for {user_email}")
     
     # Wrap in Streamlit status for chatbot UI visibility
     with st.status("🔄 Initializing Google Drive synchronization...", expanded=False) as status:
-        status_msg = intelligent_sync_tool(user_email, status_obj=status)
+        status_msg = await intelligent_sync_tool(user_email, status_obj=status)
         status.update(label="✅ Synchronization complete!", state="complete")
     
     # After sync, we want to re-run the analysis to see the new data
@@ -473,7 +476,7 @@ def sync_node(state: AgentState):
         "sync_checkpoint": True
     }
 
-def designer_node(state: AgentState):
+async def designer_node(state: AgentState):
     """Smart chart generation on FILTERED data."""
     df = state["invoices_df"]
     if df.empty:
@@ -508,8 +511,9 @@ def designer_node(state: AgentState):
             
         explicit_axes = any(k in lower_query for k in ["axis", "x-axis", "y-axis", "param"])
         
+        
         # Determine configuration with LLM and Overrides
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         cfg = extract_json_from_text(response.content)
         
         chart_type = explicit_chart_type or cfg.get("chart_type", "bar")
@@ -583,7 +587,7 @@ def designer_node(state: AgentState):
         logger.warning(f"Designer failed to select chart: {e}")
         chart_type, title, x_axis, y_axis = "bar", "Expense Analysis", None, "total_amount"
 
-    chart_json, chart_file = generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
+    chart_json, chart_file = await generate_chart_tool(df, chart_type, title, x=x_axis, y=y_axis)
     
     # Detailed response with interactive prompt
     msg = f"📊 [V2.0] I've generated a {chart_type} chart for the selected data.\n\n"
@@ -607,7 +611,7 @@ def designer_node(state: AgentState):
         "next_step": next_step
     }
 
-def secretary_node(state: AgentState):
+async def secretary_node(state: AgentState):
     """Dynamic delivery to custom destination emails with multi-sheet support."""
     df = state["invoices_df"]
     
@@ -743,11 +747,11 @@ def get_agent_graph():
     workflow.add_edge("secretary", END)
     return workflow.compile()
 
-def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = None):
+async def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = None):
     history = history or []
     
     # --- 🧹 Automatic Storage Cleanup ---
-    cleanup_old_exports()
+    await cleanup_old_exports()
     
     # --- 🔄 Restore Context from History (Full Scan) ---
     last_filters = {}
@@ -776,4 +780,4 @@ def run_agent(user_query: str, user_email: str, history: List[BaseMessage] = Non
         "generated_file": last_excel_file,
         "sync_checkpoint": False # Reset for new request
     }
-    return app.invoke(inputs)
+    return await app.ainvoke(inputs)
