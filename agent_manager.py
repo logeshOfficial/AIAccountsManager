@@ -547,6 +547,10 @@ async def designer_node(state: AgentState):
             aggregate_by = "vendor_name"
             x_axis = "vendor_name"
             title_suffix = f"by Vendor"
+        elif filters.get("start_year") and filters.get("end_year"):
+            aggregate_by = "year"
+            x_axis = "year"
+            title_suffix = f"by Year ({filters['start_year']}-{filters['end_year']})"
         elif filters.get("target_year") and not filters.get("target_month"):
             aggregate_by = "month"
             x_axis = "month"
@@ -591,6 +595,17 @@ async def designer_node(state: AgentState):
             df['month'] = pd.Categorical(df['month'], categories=month_order, ordered=True)
             df = df.sort_values('month')
             x_axis = "month"
+        elif aggregate_by == "year":
+            df = df.copy()
+            df['year'] = pd.to_datetime(df['invoice_date']).dt.year.astype(str)
+            
+            agg_dict = {y_axis: 'sum' if y_axis in df.columns else 'count'}
+            if 'vendor_name' in df.columns: 
+                 agg_dict['vendor_name'] = lambda x: ', '.join(pd.Series(x).unique())
+
+            df = df.groupby('year').agg(agg_dict).reset_index()
+            df = df.sort_values('year')
+            x_axis = "year"
         elif aggregate_by == "vendor_name" or (x_axis == "vendor_name" and aggregate_by != "none"):
             df = df.copy()
             df = df.groupby('vendor_name').agg({y_axis: 'sum'}).reset_index()
