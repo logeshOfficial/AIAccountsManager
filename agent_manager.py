@@ -316,8 +316,6 @@ async def analyst_node(state: AgentState):
       }}
     }}"""
     
-    }}"""
-    
     try:
         response = await llm.ainvoke(prompt)
         clean_content = response.content.replace('```json', '').replace('```', '').strip()
